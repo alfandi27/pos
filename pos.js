@@ -674,7 +674,7 @@ editProduk(barcode) {
             text: `Total: ${this.els.totalPembayaran.textContent}`,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#7c3aed',
+            confirmButtonColor: COLORS.primary,
             cancelButtonColor: '#6b7280',
             confirmButtonText: 'Ya, Proses!',
             cancelButtonText: 'Batal'
