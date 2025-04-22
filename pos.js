@@ -1,9 +1,4 @@
-const COLORS = {
-    primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(),
-    secondary: getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim(),
-    light: getComputedStyle(document.documentElement).getPropertyValue('--color-light').trim(),
-    danger: getComputedStyle(document.documentElement).getPropertyValue('--color-danger').trim()
-};
+
     class POSApp {
         constructor() {
             this.activeTab = null;
@@ -13,6 +8,12 @@ const COLORS = {
             this.selectedTransaksi = null;
             this.activeFilter = 'hari';
             this.activeRiwayatFilter = 'semua'; 
+            this.COLORS = {
+    primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(),
+    secondary: getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim(),
+    light: getComputedStyle(document.documentElement).getPropertyValue('--color-light').trim(),
+    danger: getComputedStyle(document.documentElement).getPropertyValue('--color-danger').trim()
+};
             this.els = {
                 tabs: document.querySelectorAll('.nav-tab'),
                 tabContents: document.querySelectorAll('.tab-content'),
@@ -674,7 +675,7 @@ editProduk(barcode) {
             text: `Total: ${this.els.totalPembayaran.textContent}`,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: COLORS.primary,
+            confirmButtonColor: this.COLORS.primary,
             cancelButtonColor: '#6b7280',
             confirmButtonText: 'Ya, Proses!',
             cancelButtonText: 'Batal'
