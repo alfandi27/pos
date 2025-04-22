@@ -665,26 +665,43 @@ editProduk(barcode) {
             this.updateTabelTransaksi();
         }
         confirmPayment() {
-            Swal.fire({
-                title: 'Konfirmasi Pembayaran',
-                text: `Total: ${this.els.totalPembayaran.textContent}`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: COLORS.primary,
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: 'Ya, Proses!',
-                cancelButtonText: 'Batal'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    this.prosesTransaksi();
-                }
-            });
+    try {
+        console.log("confirmPayment() dipanggil");
+        const self = this; // Simpan referensi 'this'
+        
+        Swal.fire({
+            title: 'Konfirmasi Pembayaran',
+            text: `Total: ${this.els.totalPembayaran.textContent}`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#7c3aed',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Ya, Proses!',
+            cancelButtonText: 'Batal'
+        }).then(function(result) {
+            console.log("Hasil SweetAlert:", result);
+            if (result.isConfirmed) {
+                self.prosesTransaksi(); // Gunakan 'self' sebagai referensi ke objek POSApp
+            }
+        }).catch(function(error) {
+            console.error("Error SweetAlert:", error);
+            // Fallback jika SweetAlert gagal
+            if (confirm(`Total: ${self.els.totalPembayaran.textContent}. Lanjutkan pembayaran?`)) {
+                self.prosesTransaksi();
+            }
+        });
+    } catch (error) {
+        console.error("Error di confirmPayment:", error);
+        // Fallback langsung ke window.confirm
+        if (confirm(`Total: ${this.els.totalPembayaran.textContent}. Lanjutkan pembayaran?`)) {
+            this.prosesTransaksi();
         }
+    }
+}
    
         // Proses transaksi
 prosesTransaksi() {
     // Ambil data
-    alert("prosesTransaksi() dipanggil");
     let produkList = JSON.parse(localStorage.getItem('produk')) || [];
     let totalPenjualan = JSON.parse(localStorage.getItem('total_penjualan')) || { 
         total: 0, 
