@@ -6,8 +6,8 @@
             this.codeReader = new ZXing.BrowserMultiFormatReader();
             this.isScanning = false;
             this.selectedTransaksi = null;
-            this.activeFilter = 'hari'; 
-           
+            this.activeFilter = 'hari';
+            this.activeRiwayatFilter = 'semua'; 
             this.els = {
                 tabs: document.querySelectorAll('.nav-tab'),
                 tabContents: document.querySelectorAll('.tab-content'),
@@ -33,6 +33,10 @@
             minggu: document.getElementById('filter-minggu'),
             bulan: document.getElementById('filter-bulan'),
             semua: document.getElementById('filter-semua')
+        },
+        riwayatFilterButtons: {
+            hari: document.getElementById('riwayat-filter-hari'),
+            semua: document.getElementById('riwayat-filter-semua')
         }
     };
            
@@ -101,10 +105,6 @@ initDashboardDateFilter() {
                     this.showProductSearchResults(keyword);
                 }, 300);
             });
-          
-            this.els.scannerBtn.addEventListener('click', () => {
-                this.startTransactionScanner();
-            });
          
             this.els.konfirmasiBtn.addEventListener('click', () => {
                 if (this.daftarTransaksi.length === 0) return;
@@ -116,13 +116,6 @@ initDashboardDateFilter() {
                 if (!this.els.searchTransaksi.contains(e.target) && 
                     !this.els.searchResults.contains(e.target)) {
                     this.els.searchResults.classList.add('hidden');
-                }
-            });
-           
-            this.setupSearchKeyboardNavigation();
-            window.addEventListener('beforeunload', () => {
-                if (this.isScanning) {
-                    this.codeReader.reset();
                 }
             });
            
@@ -511,171 +504,6 @@ editProduk(barcode) {
             }
             
             searchResults.classList.remove('hidden');
-        }
-    
-        async startScannerWithCallback(callback) {
-            try {
-                if (this.isScanning) {
-                    return; // Jangan mulai scanner jika sudah berjalan
-                }
-                
-                this.isScanning = true;
-                this.updateScannerStatus('Mendeteksi kamera...');
-                
-                const videoInputDevices = await this.codeReader.listVideoInputDevices();
-                
-                if (videoInputDevices.length === 0) {
-                    this.updateScannerStatus('Tidak ada kamera yang terdeteksi!');
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'Tidak ada kamera yang terdeteksi',
-                        icon: 'error',
-                        confirmButtonColor: '#7c3aed'
-                    });
-                    this.isScanning = false;
-                    return;
-                }
-               
-                const backCameras = videoInputDevices.filter(device => 
-                    device.label.toLowerCase().includes('back') || 
-                    device.label.toLowerCase().includes('belakang')
-                );
-                
-                const selectedDeviceId = backCameras.length > 0 ? 
-                    backCameras[0].deviceId : videoInputDevices[0].deviceId;
-               
-                this.els.scanner.style.visibility = 'visible';
-                this.els.scanner.classList.add('active');
-                
-                this.updateScannerStatus('Mengaktifkan kamera...');
-                const constraints = {
-                    video: {
-                        deviceId: { exact: selectedDeviceId },
-                        width: { ideal: 1280, min: 640 },
-                        height: { ideal: 720, min: 480 },
-                        facingMode: 'environment',
-                        frameRate: { ideal: 30, min: 15 }
-                    }
-                };
-                
-                const hints = new Map();
-                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                    ZXing.BarcodeFormat.EAN_13,
-                    ZXing.BarcodeFormat.EAN_8,
-                    ZXing.BarcodeFormat.CODE_39,
-                    ZXing.BarcodeFormat.CODE_128,
-                    ZXing.BarcodeFormat.UPC_A,
-                    ZXing.BarcodeFormat.UPC_E
-                ]);
-               
-                let lastDetectedCode = null;
-                let lastDetectionTime = 0;
-                let successiveDetections = {};
-                const debounceTime = 800; // ms
-                const minDetectionsRequired = 2; // Minimal berapa kali kode yang sama harus terdeteksi
-                
-                this.updateScannerStatus('Kamera siap, arahkan ke barcode');
-                this.codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
-                    // Tambahkan feedback visual bahwa scanner sedang bekerja
-                    const scanRegion = document.querySelector('.scan-region');
-                    if (scanRegion) {
-                        scanRegion.classList.add('active-scan');
-                        setTimeout(() => scanRegion.classList.remove('active-scan'), 100);
-                    }
-                    
-                    if (result) {
-                        const code = result.getText();
-                        const now = Date.now();
-                        this.updateScannerStatus(`Kode terdeteksi: ${code.substring(0, 8)}...`);
-                      
-                        if (code && code.length >= 8) {
-                            if (lastDetectedCode !== code || now - lastDetectionTime > debounceTime) {
-                                if (lastDetectedCode !== code) {
-                                    successiveDetections = {};
-                                }
-                               
-                                successiveDetections[code] = (successiveDetections[code] || 0) + 1;
-                                this.updateScannerStatus(`Memvalidasi kode (${successiveDetections[code]}/${minDetectionsRequired})...`);
-                                if (successiveDetections[code] >= minDetectionsRequired) {
-                                    // Hapus variabel tracking setelah berhasil
-                                    successiveDetections = {};
-                                    
-                                    navigator.vibrate && navigator.vibrate([100, 50, 100]);
-                                    this.updateScannerStatus('Berhasil! Kode valid.');
-                                    if (scanRegion) {
-                                        scanRegion.classList.add('scan-success');
-                                        setTimeout(() => {
-                                            this.closeScanner();
-                                            callback(code);
-                                        }, 300);
-                                    } else {
-                                        this.closeScanner();
-                                        callback(code);
-                                    }
-                                }
-                                
-                                lastDetectedCode = code;
-                                lastDetectionTime = now;
-                            }
-                        }
-                    }
-                  
-                    if (err && !(err instanceof ZXing.NotFoundException)) {
-                        console.error('Error saat scan barcode:', err);
-                        if (err.message) {
-                            if (err.message.includes('Malformed')) {
-                                this.updateScannerStatus('Error: Format barcode tidak valid. Coba dari jarak berbeda.');
-                            } else {
-                                this.updateScannerStatus('Error: Gagal membaca. Coba lagi.');
-                            }
-                        }
-                    } else if (err instanceof ZXing.NotFoundException) {
-                        this.updateScannerStatus('Mendeteksi...');
-                    }
-                }, hints);
-                
-            } catch (err) {
-                console.error('Error saat memulai scanner:', err);
-                this.updateScannerStatus('Error: Tidak dapat mengakses kamera!');
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Tidak dapat mengakses kamera. Pastikan browser mendukung dan izin kamera diberikan.',
-                    icon: 'error',
-                    confirmButtonColor: '#7c3aed'
-                });
-                this.closeScanner();
-            }
-        }
-     
-        updateScannerStatus(message) {
-            if (this.els.scannerStatus) {
-                this.els.scannerStatus.textContent = message;
-            }
-        }
-      
-        startScanner() {
-            const barcodeInput = document.getElementById('barcode-produk');
-            this.startScannerWithCallback((code) => {
-                barcodeInput.value = code;
-            });
-        }
-      
-        startTransactionScanner() {
-            this.startScannerWithCallback((code) => {
-                this.cariProduk(code);
-            });
-        }
-      
-        closeScanner() {
-            this.codeReader.reset();
-            this.els.scanner.classList.remove('active');
-            this.isScanning = false;
-            
-            setTimeout(() => {
-                this.els.scanner.style.visibility = 'hidden';
-                this.updateScannerStatus('Mendeteksi...');
-            }, 300);
         }
     
         cariProduk(barcode) {
@@ -1347,6 +1175,8 @@ updateProdukTerlarisList(produkTerjual) {
         tampilkanRiwayatTransaksi(filter = null) {
     const dataTransaksi = JSON.parse(localStorage.getItem('data_transaksi')) || [];
     const daftarTransaksiEl = this.els.daftarTransaksiEl;
+    // Update tampilan tombol saat membuka tab
+    this.updateRiwayatFilterButtonStyles();
     
     // Filter transaksi jika ada
     let transaksiFiltered = dataTransaksi;
@@ -1437,11 +1267,21 @@ updateProdukTerlarisList(produkTerjual) {
 }
 
 filterTransaksiHariIni() {
+    // Set filter aktif
+    this.activeRiwayatFilter = 'hari';
+    
+    // Update tampilan tombol
+    this.updateRiwayatFilterButtonStyles();
     this.tampilkanRiwayatTransaksi({ type: 'today' });
 }
 
 // 5. Tampilkan semua transaksi
 filterTransaksiSemua() {
+    // Set filter aktif
+    this.activeRiwayatFilter = 'semua';
+    
+    // Update tampilan tombol
+    this.updateRiwayatFilterButtonStyles();
     this.tampilkanRiwayatTransaksi();
 }
 
@@ -1459,6 +1299,11 @@ filterTransaksiByTanggal() {
         });
         return;
     }
+
+    // Set filter aktif ke custom
+    this.activeRiwayatFilter = 'custom';
+    // Update tampilan tombol
+    this.updateRiwayatFilterButtonStyles();
     
     this.tampilkanRiwayatTransaksi({
         type: 'date_range',
@@ -1466,6 +1311,41 @@ filterTransaksiByTanggal() {
         endDate
     });
 }
+
+updateRiwayatFilterButtonStyles() {
+    // Pastikan elemen tombol tersedia
+    if (!this.els.riwayatFilterButtons) return;
+    
+    // Reset semua tombol filter riwayat
+    Object.keys(this.els.riwayatFilterButtons).forEach(key => {
+        const button = this.els.riwayatFilterButtons[key];
+        if (button) {
+            // Reset style
+            button.className = 'px-3 py-2 rounded-lg hover:opacity-90 transition-all text-sm';
+            
+            // Set style berdasarkan status aktif
+            if (key === this.activeRiwayatFilter) {
+                button.classList.add('bg-primary', 'text-white');
+            } else {
+                button.classList.add('bg-light', 'text-secondary', 'hover:bg-gray-200');
+            }
+        }
+    });
+    
+    // Kasus khusus untuk filter tanggal kustom
+    if (this.activeRiwayatFilter === 'custom') {
+        // Reset kedua tombol ke tidak aktif
+        if (this.els.riwayatFilterButtons.hari) {
+            this.els.riwayatFilterButtons.hari.className = 
+                'px-3 py-2 rounded-lg bg-light text-secondary hover:bg-gray-200 transition-all text-sm';
+        }
+        if (this.els.riwayatFilterButtons.semua) {
+            this.els.riwayatFilterButtons.semua.className = 
+                'px-3 py-2 rounded-lg bg-light text-secondary hover:bg-gray-200 transition-all text-sm';
+        }
+    }
+}
+
 
 // 7. Menampilkan detail transaksi
 showDetailTransaksi(transaksi) {
@@ -1645,6 +1525,19 @@ updateDataPenjualanSetelahHapus(transaksi) {
     localStorage.setItem('total_penjualan', JSON.stringify(totalPenjualan));
 }
 
+startScanner() {
+    window.startScanner();
+}
+
+startTransactionScanner() {
+    window.scannerModule.startScanner((code) => {
+        this.cariProduk(code);
+    });
+}
+
+closeScanner() {
+    window.scannerModule.closeScanner();
+}
     }
 
     function formatRupiah(input) {
@@ -1668,15 +1561,8 @@ updateDataPenjualanSetelahHapus(transaksi) {
         posApp.saveProduct();
     }
 
-    function startScanner() {
-        posApp.startScanner();
-    }
-
-    function closeScanner() {
-        posApp.closeScanner();
-    }
-
     let posApp;
     document.addEventListener('DOMContentLoaded', function() {
         posApp = new POSApp();
     });
+    
