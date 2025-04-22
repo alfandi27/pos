@@ -684,6 +684,7 @@ editProduk(barcode) {
         // Proses transaksi
 prosesTransaksi() {
     // Ambil data
+    alert("prosesTransaksi() dipanggil");
     let produkList = JSON.parse(localStorage.getItem('produk')) || [];
     let totalPenjualan = JSON.parse(localStorage.getItem('total_penjualan')) || { 
         total: 0, 
