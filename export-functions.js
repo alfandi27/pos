@@ -1,8 +1,9 @@
 /**
  * FUNGSI EKSPOR DATA KE EXCEL
  * File ini berisi fungsi-fungsi untuk mengekspor data ke Excel menjadi link yang bisa diunduh
+ * Versi diperbarui: Mendukung ekspor data berdasarkan filter dashboard
  */
-
+//22042025
 class ExportFunctions {
     constructor() {
         // Inisialisasi modal untuk link download
@@ -158,15 +159,113 @@ class ExportFunctions {
         });
     }
     
+    // Mendapatkan data transaksi berdasarkan filter aktif
+    getFilteredTransaksi() {
+        // Cek apakah posApp tersedia
+        if (!window.posApp) {
+            return this.getAllTransaksi();
+        }
+        
+        const dataTransaksi = JSON.parse(localStorage.getItem('data_transaksi')) || [];
+        let startDate, endDate;
+        
+        // Tentukan rentang tanggal berdasarkan filter yang aktif
+        switch (window.posApp.activeFilter) {
+            case 'hari': // Hari ini
+                startDate = new Date();
+                startDate.setHours(0, 0, 0, 0);
+                endDate = new Date();
+                endDate.setHours(23, 59, 59, 999);
+                break;
+                
+            case 'minggu': // Minggu ini
+                startDate = new Date();
+                const day = startDate.getDay();
+                const diff = startDate.getDate() - day + (day === 0 ? -6 : 1);
+                startDate = new Date(startDate.setDate(diff));
+                startDate.setHours(0, 0, 0, 0);
+                
+                endDate = new Date();
+                endDate.setHours(23, 59, 59, 999);
+                break;
+                
+            case 'bulan': // Bulan ini
+                startDate = new Date();
+                startDate.setDate(1);
+                startDate.setHours(0, 0, 0, 0);
+                
+                endDate = new Date();
+                endDate.setHours(23, 59, 59, 999);
+                break;
+                
+            case 'custom': // Tanggal kustom
+                if (window.posApp.els.dashboardFilterTanggalMulai && 
+                    window.posApp.els.dashboardFilterTanggalAkhir) {
+                    const startDateStr = window.posApp.els.dashboardFilterTanggalMulai.value;
+                    const endDateStr = window.posApp.els.dashboardFilterTanggalAkhir.value;
+                    
+                    if (startDateStr && endDateStr) {
+                        startDate = new Date(startDateStr);
+                        startDate.setHours(0, 0, 0, 0);
+                        
+                        endDate = new Date(endDateStr);
+                        endDate.setHours(23, 59, 59, 999);
+                    } else {
+                        return this.getAllTransaksi();
+                    }
+                } else {
+                    return this.getAllTransaksi();
+                }
+                break;
+                
+            case 'semua':
+            default:
+                return this.getAllTransaksi();
+        }
+        
+        // Filter transaksi berdasarkan rentang tanggal
+        return dataTransaksi.filter(trx => {
+            const trxDate = new Date(trx.tanggal);
+            return trxDate >= startDate && trxDate <= endDate;
+        });
+    }
+    
+    // Mendapatkan semua data transaksi
+    getAllTransaksi() {
+        return JSON.parse(localStorage.getItem('data_transaksi')) || [];
+    }
+    
+    // Mendapatkan informasi filter untuk judul file
+    getFilterInfo() {
+        // Cek apakah posApp tersedia
+        if (!window.posApp) {
+            return '';
+        }
+        
+        switch (window.posApp.activeFilter) {
+            case 'hari': 
+                return 'HariIni';
+            case 'minggu': 
+                return 'MingguIni';
+            case 'bulan': 
+                return 'BulanIni';
+            case 'custom':
+                return 'Custom';
+            case 'semua':
+            default:
+                return 'Semua';
+        }
+    }
+    
     // Ekspor data transaksi ke Excel
     exportTransaksiToExcel() {
-        // Ambil data transaksi
-        const dataTransaksi = JSON.parse(localStorage.getItem('data_transaksi')) || [];
+        // Ambil data transaksi berdasarkan filter
+        const dataTransaksi = this.getFilteredTransaksi();
         
         if (dataTransaksi.length === 0) {
             Swal.fire({
                 title: 'Peringatan',
-                text: 'Belum ada data transaksi yang dapat diekspor!',
+                text: 'Belum ada data transaksi yang dapat diekspor untuk periode ini!',
                 icon: 'warning',
                 confirmButtonColor: '#7c3aed'
             });
@@ -207,7 +306,8 @@ class ExportFunctions {
         // Generate nama file
         const randomNumber = this.generateRandomNumber(8);
         const randomLetters = this.generateRandomLetters(8);
-        const fileName = `DataTransaksi_${randomNumber}_${randomLetters}.xlsx`;
+        const filterInfo = this.getFilterInfo();
+        const fileName = `DataTransaksi_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
         
         // Ekspor ke array
         const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
@@ -261,20 +361,54 @@ class ExportFunctions {
         this.uploadExcelFile(excelBuffer, fileName);
     }
     
+    // Mendapatkan data penjualan berdasarkan filter
+    getFilteredSalesData() {
+        // Ambil transaksi yang difilter
+        const filteredTransaksi = this.getFilteredTransaksi();
+        
+        // Hitung total dan keuntungan
+        let totalPenjualan = 0;
+        let totalModal = 0;
+        let totalKeuntungan = 0;
+        let produkTerjual = {};
+        
+        // Proses setiap transaksi
+        filteredTransaksi.forEach(trx => {
+            totalPenjualan += trx.total || 0;
+            totalModal += trx.totalModal || 0;
+            totalKeuntungan += trx.keuntungan || 0;
+            
+            // Proses item dalam transaksi
+            trx.items.forEach(item => {
+                if (produkTerjual[item.nama]) {
+                    produkTerjual[item.nama].jumlah += item.jumlah;
+                    produkTerjual[item.nama].keuntungan += item.keuntungan;
+                } else {
+                    produkTerjual[item.nama] = {
+                        jumlah: item.jumlah,
+                        keuntungan: item.keuntungan
+                    };
+                }
+            });
+        });
+        
+        return {
+            total: totalPenjualan,
+            totalModal: totalModal,
+            keuntungan: totalKeuntungan,
+            produkTerjual: produkTerjual
+        };
+    }
+    
     // Ekspor laporan keuntungan ke Excel
     exportLaporanKeuntungan() {
-        // Ambil data penjualan
-        const totalPenjualan = JSON.parse(localStorage.getItem('total_penjualan')) || { 
-            total: 0, 
-            totalModal: 0,
-            keuntungan: 0,
-            produkTerjual: {} 
-        };
+        // Ambil data penjualan berdasarkan filter yang aktif
+        const totalPenjualan = this.getFilteredSalesData();
         
         if (totalPenjualan.total === 0) {
             Swal.fire({
                 title: 'Peringatan',
-                text: 'Belum ada data penjualan yang dapat diekspor!',
+                text: 'Belum ada data penjualan yang dapat diekspor untuk periode ini!',
                 icon: 'warning',
                 confirmButtonColor: '#7c3aed'
             });
@@ -283,6 +417,10 @@ class ExportFunctions {
         
         // Data ringkasan
         const ringkasanData = [
+            {
+                'Keterangan': 'Periode',
+                'Nilai': this.getFilterInfo()
+            },
             {
                 'Keterangan': 'Total Penjualan',
                 'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.total)}`
@@ -320,7 +458,8 @@ class ExportFunctions {
         // Generate nama file
         const randomNumber = this.generateRandomNumber(8);
         const randomLetters = this.generateRandomLetters(8);
-        const fileName = `LaporanKeuntungan_${randomNumber}_${randomLetters}.xlsx`;
+        const filterInfo = this.getFilterInfo();
+        const fileName = `LaporanKeuntungan_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
         
         // Ekspor ke array
         const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
@@ -331,8 +470,16 @@ class ExportFunctions {
     
     // Dialog pilihan ekspor
     showExportOptions() {
+        // Dapatkan info filter untuk judul
+        const filterInfo = this.getFilterInfo();
+        let filterTitle = 'Semua Data';
+        
+        if (filterInfo !== 'Semua') {
+            filterTitle = `Data ${filterInfo}`;
+        }
+        
         Swal.fire({
-            title: 'Ekspor Data',
+            title: `Ekspor ${filterTitle}`,
             html: `
                 <div class="space-y-4">
                     <p class="text-left">Pilih jenis data yang ingin diekspor:</p>
