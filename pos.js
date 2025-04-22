@@ -1530,9 +1530,21 @@ startScanner() {
 }
 
 startTransactionScanner() {
-    window.scannerModule.startScanner((code) => {
-        this.cariProduk(code);
-    });
+    console.log("Memulai scanner transaksi...");
+    if (window.scannerModule) {
+        window.scannerModule.startScanner((code) => {
+            console.log("Kode barcode terdeteksi:", code);
+            this.cariProduk(code);
+        });
+    } else {
+        console.error("Scanner module tidak tersedia");
+        Swal.fire({
+            title: 'Error',
+            text: 'Scanner tidak tersedia. Pastikan browser mendukung kamera.',
+            icon: 'error',
+            confirmButtonColor: '#7c3aed'
+        });
+    }
 }
 
 closeScanner() {
