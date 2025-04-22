@@ -1,4 +1,9 @@
-
+const COLORS = {
+    primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(),
+    secondary: getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim(),
+    light: getComputedStyle(document.documentElement).getPropertyValue('--color-light').trim(),
+    danger: getComputedStyle(document.documentElement).getPropertyValue('--color-danger').trim()
+};
     class POSApp {
         constructor() {
             this.activeTab = null;
