@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem POS Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Hanya 3 warna utama
+                        primary: '#7c3aed', // Ungu (untuk elemen utama, tombol, header)
+                        secondary: '#6b7280', // Abu-abu (untuk teks, border)
+                        light: '#f9fafb', // Abu-abu muda (untuk background)
+                        danger: '#ef4444' // Warna khusus untuk aksi berbahaya
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .transition-all {
+            transition: all 0.3s ease;
+        }
+        
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes scanAnimation {
+            0% { background-position: 0% 0%; }
+            50% { background-position: 100% 0%; }
+            100% { background-position: 0% 0%; }
+        }
+        
+        /* Scanner */
+        .scanner-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .scanner-container.active {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .scanner-viewport {
+            width: min(90vw, 60vh);
+            height: min(90vw, 60vh);
+            position: relative;
+            border: 3px solid #7c3aed;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: contrast(1.8) grayscale(0.2);
+        }
+        
+        .drawingBuffer {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Scan guide styles */
+        .scan-guide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+        
+        .scan-region {
+            width: 70%;
+            height: 20%;
+            border: 2px solid rgba(124, 58, 237, 0.6);
+            border-radius: 8px;
+            position: relative;
+        }
+        
+        .scan-region::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.8), transparent);
+            background-size: 200% 100%;
+            animation: scanAnimation 2s linear infinite;
+            opacity: 0.8;
+        }
+        
+        .scan-hint {
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 6px 12px;
+            border-radius: 16px;
+            margin-top: 16px;
+            font-size: 14px;
+            text-align: center;
+            max-width: 80%;
+        }
+        
+        .active-scan {
+            border-color: rgba(124, 58, 237, 0.9);
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.3);
+        }
+        
+        .scan-success {
+            border-color: #10B981;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Custom tab style */
+        .nav-tab {
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .nav-tab.active {
+            border-color: #7c3aed;
+            color: #7c3aed;
+        }
+
+        /* Hide scrollbar */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Payment method styles */
+        .payment-label {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .payment-label.selected {
+            border-color: #7c3aed;
+            background-color: #f9fafb;
+        }
+        
+        .payment-label.selected .payment-icon {
+            color: #7c3aed;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header Navigation -->
+    <header class="bg-white shadow-sm fixed top-0 left-0 w-full z-40">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between py-3">
+                <h1 class="text-xl font-bold text-primary">Sistem POS</h1>
+            </div>
+            
+            <!-- Tab Navigation -->
+            <div class="flex overflow-x-auto pb-2 -mb-px hide-scrollbar">
+                <button type="button" onclick="showTab('dashboard')" class="nav-tab px-4 py-2 mr-4 text-secondary whitespace-nowrap" id="tab-dashboard">
+                    <i class="fas fa-chart-line mr-2"></i>Dashboard
+                </button>
+                <button type="button" onclick="showTab('produk')" class="nav-tab px-4 py-2 mr-4 text-secondary whitespace-nowrap" id="tab-produk">
+                    <i class="fas fa-box mr-2"></i>Produk
+                </button>
+                <button type="button" onclick="showTab('transaksi')" class="nav-tab px-4 py-2 mr-4 text-secondary whitespace-nowrap" id="tab-transaksi">
+                    <i class="fas fa-shopping-cart mr-2"></i>Transaksi
+                </button>
+                <button type="button" onclick="showTab('riwayat')" class="nav-tab px-4 py-2 text-secondary whitespace-nowrap" id="tab-riwayat">
+                    <i class="fas fa-history mr-2"></i>Riwayat
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 pt-32 pb-4">
+        <!-- Dashboard Tab -->
+<!-- Modifikasi pada bagian Dashboard Tab -->
+<div id="dashboard" class="tab-content hidden">
+    <!-- Filter Dashboard -->
+    <!-- Modifikasi pada bagian Filter Dashboard agar responsif -->
+<div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 mb-4">
+    <h2 class="text-lg font-semibold mb-3">Filter Laporan</h2>
+    
+    <!-- Filter buttons dengan tampilan grid responsif -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+        <button type="button" onclick="posApp.filterDashboard('hari')" 
+               class="px-3 py-2 rounded-lg text-sm transition-all" id="filter-hari">
+            <i class="fas fa-calendar-day mr-1"></i>Hari Ini
+        </button>
+        <button type="button" onclick="posApp.filterDashboard('minggu')" 
+               class="px-3 py-2 rounded-lg text-sm transition-all" id="filter-minggu">
+            <i class="fas fa-calendar-week mr-1"></i>Minggu Ini
+        </button>
+        <button type="button" onclick="posApp.filterDashboard('bulan')" 
+               class="px-3 py-2 rounded-lg text-sm transition-all" id="filter-bulan">
+            <i class="fas fa-calendar-alt mr-1"></i>Bulan Ini
+        </button>
+        <button type="button" onclick="posApp.filterDashboard('semua')" 
+               class="px-3 py-2 rounded-lg text-sm transition-all" id="filter-semua">
+            <i class="fas fa-infinity mr-1"></i>Semua
+        </button>
+    </div>
+    
+    <!-- Filter tanggal dengan tampilan responsif -->
+    <div class="mt-3 pt-3 border-t">
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-secondary mb-1">Dari Tanggal</label>
+                <input type="date" id="dashboard-tanggal-mulai" 
+                      class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+            </div>
+            <div class="sm:col-span-2">
+                <label class="block text-sm font-medium text-secondary mb-1">Sampai Tanggal</label>
+                <input type="date" id="dashboard-tanggal-akhir" 
+                      class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+            </div>
+            <div class="flex items-end">
+                <button type="button" onclick="posApp.filterDashboardByTanggal()" 
+                       class="w-full px-3 py-2 h-10 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                    <i class="fas fa-filter mr-1"></i>Filter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <h3 class="text-sm font-medium text-secondary">Total Penjualan</h3>
+            <p class="text-2xl font-bold text-primary mt-2" id="total-penjualan">Rp 0</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <h3 class="text-sm font-medium text-secondary">Total Modal</h3>
+            <p class="text-2xl font-bold text-primary mt-2" id="total-modal">Rp 0</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <h3 class="text-sm font-medium text-secondary">Total Keuntungan</h3>
+            <p class="text-2xl font-bold text-primary mt-2" id="total-keuntungan">Rp 0</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <h3 class="text-sm font-medium text-secondary">Total Produk</h3>
+            <p class="text-2xl font-bold text-primary mt-2" id="total-produk">0</p>
+        </div>
+        <div class="col-span-2 bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <h3 class="text-sm font-medium text-secondary">Jumlah Transaksi</h3>
+            <p class="text-2xl font-bold text-primary mt-2" id="transaksi-hari-ini">0</p>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 mb-4">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold">Produk Terlaris</h2>
+            <button type="button" onclick="posApp.exportToExcel()" 
+                   class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                <i class="fas fa-file-excel mr-2"></i>Ekspor Data
+            </button>
+        </div>
+        <div id="produk-terjual-list" class="space-y-3">
+            <!-- Produk terlaris akan ditampilkan di sini -->
+        </div>
+    </div>
+    
+</div>
+        
+        <!-- Produk Tab -->
+        <div id="produk" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 mb-4">
+                <div class="flex flex-col justify-between items-start gap-4 mb-4">
+                    <h2 class="text-lg font-semibold">Daftar Produk</h2>
+                    <div class="w-full flex flex-col gap-3">
+                        <div class="relative w-full">
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary"></i>
+                            <input type="text" id="search-produk" placeholder="Cari produk..." 
+                                  class="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                        </div>
+                        <button type="button" onclick="showAddProductModal()" 
+                               class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                            <i class="fas fa-plus mr-2"></i>Tambah Produk
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4" id="produk-list">
+                    <!-- Produk akan ditampilkan di sini -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Transaksi Tab -->
+        <div id="transaksi" class="tab-content hidden">
+            <div class="grid grid-cols-1 gap-4">
+                <!-- Daftar Belanja -->
+                <div>
+                    <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 mb-4">
+                        <div class="flex flex-col justify-between items-start gap-4 mb-4">
+                            <h2 class="text-lg font-semibold">Daftar Belanja</h2>
+                            <div class="w-full flex flex-col gap-3">
+                                <div class="relative w-full">
+                                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary"></i>
+                                    <input type="text" id="search-produk-transaksi" placeholder="Cari produk..." 
+                                          class="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                                    <!-- Dropdown results container -->
+                                    <div id="search-results" class="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg hidden max-h-64 overflow-y-auto"></div>
+                                </div>
+                                <button type="button" id="btn-mulai-scan" 
+                                       class="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                                    <i class="fas fa-barcode mr-2"></i>Scan Barcode
+                                </button>
+                            </div>
+                        </div>
+                      
+                        <div id="produk-scan-mobile" class="space-y-4">
+                            <!-- Data transaksi akan ditampilkan di sini -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ringkasan Pembayaran -->
+                <div>
+                    <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 sticky top-32">
+                        <h2 class="text-lg font-semibold mb-4 pb-3 border-b">Ringkasan Pembayaran</h2>
+                        
+                        <div class="space-y-6">
+                            <!-- Total -->
+                            <div class="flex justify-between items-center text-lg">
+                                <span class="font-medium">Total</span>
+                                <span class="font-bold text-primary" id="total-pembayaran">Rp 0</span>
+                            </div>
+                            
+                            <!-- Metode Pembayaran -->
+                            <div id="metode-pembayaran" class="space-y-3 hidden">
+                                <label class="block text-sm font-medium text-secondary">Metode Pembayaran</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="relative">
+                                        <input type="radio" id="payment-tunai" name="payment" value="tunai" class="sr-only" checked>
+                                        <label for="payment-tunai" class="block p-4 border rounded-lg cursor-pointer flex items-center gap-3 hover:bg-light transition-all payment-label">
+                                            <i class="fas fa-money-bill-wave text-xl text-secondary payment-icon"></i>
+                                            <span class="font-medium">Tunai</span>
+                                        </label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="radio" id="payment-qris" name="payment" value="qris" class="sr-only">
+                                        <label for="payment-qris" class="block p-4 border rounded-lg cursor-pointer flex items-center gap-3 hover:bg-light transition-all payment-label">
+                                            <i class="fas fa-qrcode text-xl text-secondary payment-icon"></i>
+                                            <span class="font-medium">QRIS</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tombol Konfirmasi -->
+                            <button type="button" id="btn-konfirmasi" 
+                                   class="w-full px-4 py-3 bg-primary text-white rounded-lg hover:opacity-90 disabled:bg-secondary disabled:cursor-not-allowed transition-all hidden">
+                                Konfirmasi Pembayaran
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="riwayat" class="tab-content hidden">
+            <!-- Modifikasi pada bagian Filter di Tab Riwayat -->
+<div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 mb-4">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3">
+        <h2 class="text-lg font-semibold">Riwayat Transaksi</h2>
+        <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="posApp.filterTransaksiHariIni()" 
+                   class="px-3 py-2 bg-light text-secondary rounded-lg hover:bg-gray-200 transition-all text-sm"
+                   id="riwayat-filter-hari">
+                <i class="fas fa-calendar-day mr-1"></i>Hari Ini
+            </button>
+            <button type="button" onclick="posApp.filterTransaksiSemua()" 
+                   class="px-3 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all text-sm"
+                   id="riwayat-filter-semua">
+                <i class="fas fa-calendar mr-1"></i>Semua
+            </button>
+        </div>
+    </div>
+    
+    <!-- Filter Tanggal -->
+    <div class="mb-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
+        <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-secondary mb-1">Dari Tanggal</label>
+            <input type="date" id="filter-tanggal-mulai" 
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+        </div>
+        <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-secondary mb-1">Sampai Tanggal</label>
+            <input type="date" id="filter-tanggal-akhir" 
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+        </div>
+        <div class="flex items-end">
+            <button type="button" onclick="posApp.filterTransaksiByTanggal()" 
+                   class="w-full px-3 py-2 h-10 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                <i class="fas fa-filter mr-1"></i>Filter
+            </button>
+        </div>
+    </div>
+    
+    <!-- Daftar Transaksi -->
+    <div id="daftar-transaksi" class="space-y-4">
+        <!-- Transaksi akan ditampilkan di sini -->
+        <div class="text-center py-8 text-secondary">
+            Belum ada data transaksi
+        </div>
+    </div>
+</div>
+            
+            <!-- Tombol Hapus Semua Riwayat -->
+            <div class="flex justify-end">
+                <button type="button" onclick="posApp.hapusSemuaRiwayat()" 
+                       class="px-4 py-2 bg-danger text-white rounded-lg hover:opacity-90 transition-all">
+                    <i class="fas fa-trash-alt mr-2"></i>Hapus Semua Riwayat
+                </button>
+            </div>
+        </div>        
+    </main>
+    
+    <!-- Modal Tambah/Edit Produk -->
+    <div id="product-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white shadow-xl rounded-xl">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold" id="modal-title">Tambah Produk Baru</h3>
+                    <button type="button" onclick="closeProductModal()" class="text-secondary hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-secondary mb-1">Kode Barcode</label>
+                        <div class="relative">
+                            <input type="text" id="barcode-produk" 
+                                  class="w-full px-3 py-2 pr-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                            <button type="button" onclick="startScanner()" 
+                                   class="absolute right-2 top-1/2 transform -translate-y-1/2 text-secondary hover:text-primary">
+                                <i class="fas fa-barcode text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-secondary mb-1">Nama Produk</label>
+                        <input type="text" id="nama-produk" 
+                              class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                    </div>
+                    
+                    <div>
+                    <label class="block text-sm font-medium text-secondary mb-1">Harga Jual (Rp)</label>
+                    <input type="text" id="harga-produk" oninput="formatRupiah(this)"
+                          class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                </div>
+                
+                <!-- Tambahkan field baru untuk harga modal -->
+                <div>
+                    <label class="block text-sm font-medium text-secondary mb-1">Harga Modal (Rp)</label>
+                    <input type="text" id="modal-produk" oninput="formatRupiah(this)"
+                          class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-secondary mb-1">Stok</label>
+                        <input type="number" id="stok-produk" 
+                              class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button type="button" onclick="saveProduct()" 
+                           class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                        Simpan Produk
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="detail-transaksi-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white shadow-xl rounded-xl">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold">Detail Transaksi</h3>
+                    <button type="button" onclick="posApp.closeDetailTransaksiModal()" class="text-secondary hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-secondary">Nomor Transaksi:</p>
+                            <p class="font-medium" id="detail-nomor-transaksi">TRX-123456789</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-secondary">Tanggal:</p>
+                            <p class="font-medium" id="detail-tanggal-transaksi">01 Jan 2023</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <p class="text-sm text-secondary mb-2">Metode Pembayaran:</p>
+                    <p class="font-medium" id="detail-metode-pembayaran">Tunai</p>
+                </div>
+                
+                <div class="mb-4">
+                    <p class="text-sm text-secondary mb-2">Item:</p>
+                    <div id="detail-item-transaksi" class="space-y-2">
+                        <!-- Item akan ditampilkan di sini -->
+                    </div>
+                </div>
+                
+                <div class="border-t pt-4">
+                    <div class="flex justify-between items-center">
+                        <p class="font-semibold">Total:</p>
+                        <p class="font-bold text-primary" id="detail-total-transaksi">Rp 0</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button type="button" onclick="posApp.hapusTransaksi()" 
+                           class="w-full px-4 py-2 bg-danger text-white rounded-lg hover:opacity-90 transition-all">
+                        Hapus Transaksi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scanner Container -->
+    <div id="scanner" class="scanner-container">
+        <div class="scanner-viewport">
+            <video id="video" class="drawingBuffer"></video>
+            <div class="scan-guide">
+                <div class="scan-region"></div>
+                <div class="scan-hint">Posisikan barcode di dalam area kotak</div>
+            </div>
+        </div>
+        <div class="mt-4 text-white text-center text-sm mb-4">
+            <p>Status: <span id="scanner-status">Mendeteksi...</span></p>
+        </div>
+        <button type="button" onclick="closeScanner()" 
+               class="mt-2 px-4 py-2 bg-danger text-white rounded-lg hover:opacity-90 transition-all">
+            Tutup Scanner
+        </button>
+    </div>
+    
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script src="https://cdn.jsdelivr.net/gh/alfandi27/pos@latest/pos.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/alfandi27/pos@latest/export-functions.js"></script>
+    <script type="module">
+        // Import ScannerModule
+        import { ScannerModule } from 'https://cdn.jsdelivr.net/gh/alfandi27/pos@latest/ScannerModule.js';
+        
+        // Inisialisasi ketika dokumen siap
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inisialisasi scanner
+            window.scannerModule = new ScannerModule('scanner', 'scanner-status');
+            
+            // Setup event listener untuk tombol scan
+            document.getElementById('btn-mulai-scan').addEventListener('click', function() {
+                window.scannerModule.startScanner((code) => {
+                    window.posApp.cariProduk(code);
+                });
+            });
+            
+            // Setup event listener untuk scan di modal produk
+            const scanButtonInModal = document.querySelector('[onclick="startScanner()"]');
+            if (scanButtonInModal) {
+                scanButtonInModal.onclick = function() {
+                    window.scannerModule.startScanner((code) => {
+                        document.getElementById('barcode-produk').value = code;
+                    });
+                };
+            }
+        });
+        
+        // Definisikan fungsi global
+        window.startScanner = function() {
+            const barcodeInput = document.getElementById('barcode-produk');
+            window.scannerModule.startScanner((code) => {
+                barcodeInput.value = code;
+            });
+        }
+        
+        window.closeScanner = function() {
+            window.scannerModule.closeScanner();
+        }
+    </script>
+</body>
+</html>
