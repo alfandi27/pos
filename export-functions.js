@@ -35,6 +35,14 @@ class ExportFunctions {
         return result;
     }
     
+    // Fungsi untuk menambahkan parameter ke URL
+    addParamToUrl(url) {
+        // Cek apakah URL sudah memiliki parameter atau tidak
+        const hasParams = url.includes('?');
+        // Tambahkan parameter bukaolshop_open_browser=true
+        return hasParams ? `${url}&bukaolshop_open_browser=true` : `${url}?bukaolshop_open_browser=true`;
+    }
+    
     // Buat modal untuk menampilkan link download
     createDownloadModal() {
         // Cek jika modal sudah ada
@@ -70,7 +78,7 @@ class ExportFunctions {
                     </div>
                     
                     <div class="mt-6">
-                        <button type="button" onclick="window.open(document.getElementById('linkUnduhan').value, '_blank')" 
+                        <button type="button" onclick="exportFunctions.openDownloadLink()" 
                                class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
                             Buka Link
                         </button>
@@ -97,6 +105,13 @@ class ExportFunctions {
         setTimeout(() => {
             linkStatus.classList.add('hidden');
         }, 2000);
+    }
+    
+    // Fungsi baru untuk membuka link dengan parameter
+    openDownloadLink() {
+        const link = document.getElementById('linkUnduhan').value;
+        const linkWithParam = this.addParamToUrl(link);
+        window.open(linkWithParam, '_blank');
     }
     
     // Tampilkan modal download link
