@@ -305,7 +305,7 @@ showImageError() {
         return;
     }
 
-     if (gambarUrl && !isValidImageUrl(gambarUrl)) {
+     if (gambarUrl && !this.isValidImageUrl(gambarUrl)) {
         Swal.fire({
             title: 'Peringatan',
             text: 'URL gambar tidak valid. Pastikan link mengarah ke file gambar.',
