@@ -9,6 +9,11 @@
             this.activeFilter = 'hari';
             this.activeRiwayatFilter = 'semua'; 
             this.viewMode = localStorage.getItem('product-view-mode') || 'list';
+            this.currentDiscount = {
+        type: null,        // 'percentage' atau 'nominal'
+        value: 0,          // nilai diskon
+        amount: 0          // jumlah diskon dalam rupiah
+    };
             this.COLORS = {
     primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(),
     secondary: getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim(),
@@ -746,68 +751,209 @@ renderProductList(products) {
                 });
             }
         }
-      
-        updateTabelTransaksi() {
-            const mobileContainer = this.els.produkScanMobile;
-            mobileContainer.innerHTML = '';
-            
-            if (this.daftarTransaksi.length === 0) {
-                mobileContainer.innerHTML = `
-                    <div class="text-center py-8 text-secondary">
-                        Belum ada produk yang dipilih
-                    </div>
-                `;
-                this.els.totalPembayaran.textContent = 'Rp 0';
-                this.els.konfirmasiBtn.classList.add('hidden');
-                this.els.metodePembayaran.classList.add('hidden');
-                return;
-            }
-            
-            let totalPembayaran = 0;
-            this.daftarTransaksi.forEach((item, index) => {
-                const totalHarga = item.harga * item.jumlah;
-                totalPembayaran += totalHarga;
-           
-                const mobileCard = document.createElement('div');
-                mobileCard.className = 'bg-white border rounded-lg p-4 space-y-3';
-                mobileCard.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h3 class="font-medium">${item.nama}</h3>
-                            <p class="text-sm text-secondary">Barcode: ${item.barcode}</p>
-                        </div>
-                        <button onclick="posApp.hapusProdukTabel(${index})" 
-                                class="text-danger hover:bg-red-100 p-2 rounded-full transition-all">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="flex items-center justify-between pt-2 border-t">
-                        <div class="text-sm">
-                            <p>Harga: Rp ${new Intl.NumberFormat('id-ID').format(item.harga)}</p>
-                            <p class="font-medium">Total: Rp ${new Intl.NumberFormat('id-ID').format(totalHarga)}</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="posApp.ubahJumlah(${index}, -1)" 
-                                    class="w-8 h-8 rounded-full bg-light hover:bg-gray-200 flex items-center justify-center transition-all">
-                                <i class="fas fa-minus text-sm"></i>
-                            </button>
-                            <span class="w-8 text-center">${item.jumlah}</span>
-                            <button onclick="posApp.ubahJumlah(${index}, 1)" 
-                                    class="w-8 h-8 rounded-full bg-light hover:bg-gray-200 flex items-center justify-center transition-all"
-                                    ${item.jumlah >= item.maxStok ? 'disabled' : ''}>
-                                <i class="fas fa-plus text-sm"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                mobileContainer.appendChild(mobileCard);
+
+        // Method untuk menampilkan section diskon
+showDiscountSection() {
+    document.getElementById('discount-section').classList.remove('hidden');
+    document.getElementById('btn-add-discount').classList.add('hidden');
+    
+    // Focus ke input discount value
+    document.getElementById('discount-value').focus();
+}
+
+// Method untuk menyembunyikan section diskon
+hideDiscountSection() {
+    document.getElementById('discount-section').classList.add('hidden');
+    document.getElementById('btn-add-discount').classList.remove('hidden');
+    
+    // Reset form
+    this.resetDiscountForm();
+}
+
+// Method untuk reset form diskon
+resetDiscountForm() {
+    document.getElementById('discount-type').value = 'percentage';
+    document.getElementById('discount-value').value = '';
+    document.getElementById('applied-discount').classList.add('hidden');
+}
+
+// Method untuk quick discount
+quickDiscount(value, type) {
+    document.getElementById('discount-type').value = type;
+    document.getElementById('discount-value').value = value;
+    this.applyDiscount();
+}
+
+// Method untuk menerapkan diskon
+applyDiscount() {
+    const type = document.getElementById('discount-type').value;
+    const value = parseFloat(document.getElementById('discount-value').value) || 0;
+    
+    if (value <= 0) {
+        Swal.fire({
+            title: 'Peringatan',
+            text: 'Masukkan nilai diskon yang valid!',
+            icon: 'warning',
+            confirmButtonColor: '#7c3aed'
+        });
+        return;
+    }
+    
+    const subtotal = this.calculateSubtotal();
+    let discountAmount = 0;
+    
+    if (type === 'percentage') {
+        if (value > 100) {
+            Swal.fire({
+                title: 'Peringatan',
+                text: 'Diskon persentase tidak boleh lebih dari 100%!',
+                icon: 'warning',
+                confirmButtonColor: '#7c3aed'
             });
-           
-            this.els.totalPembayaran.textContent = 
-                `Rp ${new Intl.NumberFormat('id-ID').format(totalPembayaran)}`;
-            this.els.konfirmasiBtn.classList.remove('hidden');
-            this.els.metodePembayaran.classList.remove('hidden');
+            return;
         }
+        discountAmount = (subtotal * value) / 100;
+    } else {
+        if (value > subtotal) {
+            Swal.fire({
+                title: 'Peringatan',
+                text: 'Diskon nominal tidak boleh lebih dari subtotal!',
+                icon: 'warning',
+                confirmButtonColor: '#7c3aed'
+            });
+            return;
+        }
+        discountAmount = value;
+    }
+    
+    // Simpan diskon
+    this.currentDiscount = {
+        type: type,
+        value: value,
+        amount: discountAmount
+    };
+    
+    // Update tampilan
+    this.updateDiscountDisplay();
+    this.updateTotalPembayaran();
+    
+    // Tampilkan applied discount
+    document.getElementById('applied-discount').classList.remove('hidden');
+}
+
+// Method untuk update tampilan diskon
+updateDiscountDisplay() {
+    const { type, value, amount } = this.currentDiscount;
+    const displayEl = document.getElementById('discount-display');
+    
+    if (type === 'percentage') {
+        displayEl.textContent = `${value}% (-Rp ${new Intl.NumberFormat('id-ID').format(amount)})`;
+    } else {
+        displayEl.textContent = `-Rp ${new Intl.NumberFormat('id-ID').format(amount)}`;
+    }
+}
+
+// Method untuk menghapus diskon
+removeDiscount() {
+    this.currentDiscount = {
+        type: null,
+        value: 0,
+        amount: 0
+    };
+    
+    this.hideDiscountSection();
+    this.updateTotalPembayaran();
+}
+
+// Method untuk menghitung subtotal
+calculateSubtotal() {
+    let subtotal = 0;
+    this.daftarTransaksi.forEach(item => {
+        subtotal += item.harga * item.jumlah;
+    });
+    return subtotal;
+}
+      
+updateTabelTransaksi() {
+    const mobileContainer = this.els.produkScanMobile;
+    mobileContainer.innerHTML = '';
+    
+    if (this.daftarTransaksi.length === 0) {
+        mobileContainer.innerHTML = `
+            <div class="text-center py-8 text-secondary">
+                Belum ada produk yang dipilih
+            </div>
+        `;
+        // Reset tampilan pembayaran
+        document.getElementById('subtotal-pembayaran').textContent = 'Rp 0';
+        document.getElementById('total-pembayaran').textContent = 'Rp 0';
+        this.els.konfirmasiBtn.classList.add('hidden');
+        this.els.metodePembayaran.classList.add('hidden');
+        document.getElementById('btn-add-discount').classList.add('hidden');
+        this.hideDiscountSection();
+        return;
+    }
+    
+    // Render items
+    this.daftarTransaksi.forEach((item, index) => {
+        const totalHarga = item.harga * item.jumlah;
+        
+        const mobileCard = document.createElement('div');
+        mobileCard.className = 'bg-white border rounded-lg p-4 space-y-3';
+        mobileCard.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-medium">${item.nama}</h3>
+                    <p class="text-sm text-secondary">Barcode: ${item.barcode}</p>
+                </div>
+                <button onclick="posApp.hapusProdukTabel(${index})" 
+                        class="text-danger hover:bg-red-100 p-2 rounded-full transition-all">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="flex items-center justify-between pt-2 border-t">
+                <div class="text-sm">
+                    <p>Harga: Rp ${new Intl.NumberFormat('id-ID').format(item.harga)}</p>
+                    <p class="font-medium">Total: Rp ${new Intl.NumberFormat('id-ID').format(totalHarga)}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="posApp.ubahJumlah(${index}, -1)" 
+                            class="w-8 h-8 rounded-full bg-light hover:bg-gray-200 flex items-center justify-center transition-all">
+                        <i class="fas fa-minus text-sm"></i>
+                    </button>
+                    <span class="w-8 text-center">${item.jumlah}</span>
+                    <button onclick="posApp.ubahJumlah(${index}, 1)" 
+                            class="w-8 h-8 rounded-full bg-light hover:bg-gray-200 flex items-center justify-center transition-all"
+                            ${item.jumlah >= item.maxStok ? 'disabled' : ''}>
+                        <i class="fas fa-plus text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        mobileContainer.appendChild(mobileCard);
+    });
+    
+    // Update totals
+    this.updateTotalPembayaran();
+    
+    // Show UI elements
+    this.els.konfirmasiBtn.classList.remove('hidden');
+    this.els.metodePembayaran.classList.remove('hidden');
+    document.getElementById('btn-add-discount').classList.remove('hidden');
+}
+
+        updateTotalPembayaran() {
+    const subtotal = this.calculateSubtotal();
+    const discountAmount = this.currentDiscount.amount || 0;
+    const total = subtotal - discountAmount;
+    
+    // Update tampilan
+    document.getElementById('subtotal-pembayaran').textContent = 
+        `Rp ${new Intl.NumberFormat('id-ID').format(subtotal)}`;
+    
+    document.getElementById('total-pembayaran').textContent = 
+        `Rp ${new Intl.NumberFormat('id-ID').format(total)}`;
+}
      
         ubahJumlah(index, perubahan) {
             const item = this.daftarTransaksi[index];
@@ -889,12 +1035,23 @@ prosesTransaksi() {
     // Data untuk penyimpanan transaksi
     let dataTransaksi = JSON.parse(localStorage.getItem('data_transaksi')) || [];
     
+    // Hitung subtotal dan total
+    const subtotal = this.calculateSubtotal();
+    const discountAmount = this.currentDiscount.amount || 0;
+    const finalTotal = subtotal - discountAmount;
+    
     // Data transaksi baru
     let transaksiData = {
         nomor: nomorTransaksi,
         tanggal: tanggalTransaksi,
         items: [],
-        total: 0,
+        subtotal: subtotal,
+        discount: {
+            type: this.currentDiscount.type,
+            value: this.currentDiscount.value,
+            amount: discountAmount
+        },
+        total: finalTotal,
         totalModal: 0,
         keuntungan: 0
     };
@@ -910,13 +1067,18 @@ prosesTransaksi() {
             const hargaTotal = item.harga * item.jumlah;
             const modalProduk = produk.modalNominal || 0;
             const modalTotal = modalProduk * item.jumlah;
-            const keuntunganItem = hargaTotal - modalTotal;
+            
+            // Hitung proporsi diskon untuk item ini
+            const itemDiscountProportion = subtotal > 0 ? (hargaTotal / subtotal) : 0;
+            const itemDiscountAmount = discountAmount * itemDiscountProportion;
+            const itemFinalTotal = hargaTotal - itemDiscountAmount;
+            const keuntunganItem = itemFinalTotal - modalTotal;
             
             // Update stok
             produkList[produkIndex].stok = (parseInt(produkList[produkIndex].stok) - item.jumlah).toString();
             
             // Update total penjualan
-            totalPenjualan.total += hargaTotal;
+            totalPenjualan.total += itemFinalTotal;
             totalPenjualan.totalModal = (totalPenjualan.totalModal || 0) + modalTotal;
             totalPenjualan.keuntungan = (totalPenjualan.keuntungan || 0) + keuntunganItem;
             
@@ -941,11 +1103,12 @@ prosesTransaksi() {
                 jumlah: item.jumlah,
                 subtotal: hargaTotal,
                 subtotalModal: modalTotal,
+                discountAmount: itemDiscountAmount,
+                finalTotal: itemFinalTotal,
                 keuntungan: keuntunganItem
             });
             
             // Update total transaksi
-            transaksiData.total += hargaTotal;
             transaksiData.totalModal += modalTotal;
             transaksiData.keuntungan += keuntunganItem;
         }
@@ -967,15 +1130,19 @@ prosesTransaksi() {
     localStorage.setItem('produk', JSON.stringify(produkList));
     localStorage.setItem('total_penjualan', JSON.stringify(totalPenjualan));
     
-    // Reset transaksi
+    // Reset transaksi dan diskon
     this.daftarTransaksi = [];
+    this.currentDiscount = { type: null, value: 0, amount: 0 };
     this.updateTabelTransaksi();
     this.updateDashboard();
     
     // Tampilkan pesan sukses
+    const discountText = discountAmount > 0 ? 
+        `\nDiskon: Rp ${new Intl.NumberFormat('id-ID').format(discountAmount)}` : '';
+    
     Swal.fire({
         title: 'Transaksi Berhasil!',
-        text: `Pembayaran dengan ${paymentMethod === 'tunai' ? 'Tunai' : 'QRIS'} telah diproses`,
+        text: `Pembayaran dengan ${paymentMethod === 'tunai' ? 'Tunai' : 'QRIS'} telah diproses${discountText}`,
         icon: 'success',
         confirmButtonColor: '#7c3aed'
     });
@@ -1574,11 +1741,24 @@ showDetailTransaksi(transaksi) {
                     <p class="font-medium">${item.nama}</p>
                     <p class="text-xs text-secondary">Rp ${new Intl.NumberFormat('id-ID').format(item.harga)} x ${item.jumlah}</p>
                 </div>
-                <p class="font-medium">Rp ${new Intl.NumberFormat('id-ID').format(item.subtotal)}</p>
+                <p class="font-medium">Rp ${new Intl.NumberFormat('id-ID').format(item.finalTotal || item.subtotal)}</p>
             </div>
         `;
         itemContainer.appendChild(itemDiv);
     });
+    
+    // Tambahkan info diskon jika ada
+    if (transaksi.discount && transaksi.discount.amount > 0) {
+        const discountDiv = document.createElement('div');
+        discountDiv.className = 'py-2 border-b text-yellow-600';
+        discountDiv.innerHTML = `
+            <div class="flex justify-between items-center">
+                <span class="text-sm">Diskon ${transaksi.discount.type === 'percentage' ? transaksi.discount.value + '%' : 'Nominal'}</span>
+                <span class="font-medium">-Rp ${new Intl.NumberFormat('id-ID').format(transaksi.discount.amount)}</span>
+            </div>
+        `;
+        itemContainer.appendChild(discountDiv);
+    }
     
     // Set total
     document.getElementById('detail-total-transaksi').textContent = 
