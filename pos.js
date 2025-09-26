@@ -1639,6 +1639,10 @@ closeScanner() {
         posApp.closeProductModal();
     }
 
+ function saveProduct() {
+        posApp.saveProduct();
+    }
+
     let posApp;
     document.addEventListener('DOMContentLoaded', function() {
         posApp = new POSApp();
