@@ -215,6 +215,10 @@ initDashboardDateFilter() {
             document.getElementById('nama-produk').value = '';
             document.getElementById('harga-produk').value = '';
             document.getElementById('stok-produk').value = '';
+            document.getElementById('gambar-produk').value = ''; // TAMBAH INI
+    
+    // Hide image preview
+    document.getElementById('image-preview').classList.add('hidden'); // TAMBAH INI
             
             delete modal.dataset.editBarcode;
             modal.classList.remove('hidden');
@@ -231,12 +235,23 @@ initDashboardDateFilter() {
     const harga = document.getElementById('harga-produk').value.replace(/\D/g, '');
     const hargaModal = document.getElementById('modal-produk').value.replace(/\D/g, '');
     const stok = document.getElementById('stok-produk').value;
-    
+    const gambarUrl = document.getElementById('gambar-produk').value.trim();
+            
     // Validasi form
     if (!barcode || !nama || !harga || !hargaModal || !stok) {
         Swal.fire({
             title: 'Peringatan',
-            text: 'Semua kolom harus diisi!',
+            text: 'Semua kolom kecuali gambar harus diisi!',
+            icon: 'warning',
+            confirmButtonColor: '#7c3aed'
+        });
+        return;
+    }
+
+     if (gambarUrl && !isValidImageUrl(gambarUrl)) {
+        Swal.fire({
+            title: 'Peringatan',
+            text: 'URL gambar tidak valid. Pastikan link mengarah ke file gambar.',
             icon: 'warning',
             confirmButtonColor: '#7c3aed'
         });
@@ -268,6 +283,7 @@ initDashboardDateFilter() {
                 modalNominal: parseInt(hargaModal),
                 keuntungan,
                 stok,
+                gambarUrl: gambarUrl || null,
                 createdAt: produkList[index].createdAt
             };
             
@@ -295,6 +311,7 @@ initDashboardDateFilter() {
             modalNominal: parseInt(hargaModal),
             keuntungan,
             stok,
+            gambarUrl: gambarUrl || null,
             createdAt: new Date().toISOString()
         });
     }
@@ -330,6 +347,16 @@ editProduk(barcode) {
     document.getElementById('harga-produk').value = produk.harga;
     document.getElementById('modal-produk').value = produk.modal || '';
     document.getElementById('stok-produk').value = produk.stok;
+    document.getElementById('gambar-produk').value = produk.gambarUrl || ''; // TAMBAH INI
+    
+    // Tampilkan preview jika ada gambar
+    const gambarUrl = produk.gambarUrl;
+    if (gambarUrl) {
+        const previewContainer = document.getElementById('image-preview');
+        const previewImg = document.getElementById('preview-img');
+        previewImg.src = gambarUrl;
+        previewContainer.classList.remove('hidden');
+    }
     
     // Set data edit
     const productModal = this.els.productModal; // Ubah nama variabel dari modal ke productModal
@@ -418,75 +445,92 @@ editProduk(barcode) {
             this.renderProductList(sortedProducts);
         }
         
-        renderProductList(products) {
-            const produkListElement = document.getElementById('produk-list');
-            let listHTML = '';
+  renderProductList(products) {
+    const produkListElement = document.getElementById('produk-list');
+    let listHTML = '';
+    
+    if (products.length === 0) {
+        listHTML = `
+            <div class="text-center py-8 text-secondary">
+                Belum ada produk yang sesuai dengan pencarian.
+            </div>
+        `;
+    } else {
+        products.forEach((p) => {
+            // Tentukan gambar yang akan ditampilkan
+            const gambarSrc = p.gambarUrl || 'https://via.placeholder.com/60x60/e5e7eb/6b7280?text=No+Image';
             
-            if (products.length === 0) {
-                listHTML = `
-                    <div class="text-center py-8 text-secondary">
-                        Belum ada produk yang sesuai dengan pencarian.
-                    </div>
-                `;
-            } else {
-                products.forEach((p) => {
-                    listHTML += `
-                        <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all">
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="bg-light text-primary p-3 rounded-lg">
-                                    <i class="fas fa-box"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h3 class="font-medium text-lg">${p.nama}</h3>
-                                    <p class="text-sm text-secondary">Barcode: ${p.barcode}</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between mt-4 pt-4 border-t">
-                                <div>
-                                    <p class="font-medium text-lg">${p.harga}</p>
-                                    <p class="text-sm text-secondary">Stok: ${p.stok}</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="posApp.editProduk('${p.barcode}')" 
-                                        class="p-2 text-secondary hover:bg-light hover:text-primary rounded-full transition-all">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button onclick="posApp.hapusProduk('${p.barcode}')" 
-                                        class="p-2 text-danger hover:bg-red-100 rounded-full transition-all">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
+            listHTML += `
+                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all">
+                    <div class="flex items-center gap-3 mb-3">
+                        <!-- Gambar produk -->
+                        <div class="w-16 h-16 flex-shrink-0">
+                            <img src="${gambarSrc}" 
+                                 alt="${p.nama}"
+                                 class="w-full h-full object-cover rounded-lg border border-gray-200"
+                                 onerror="this.src='https://via.placeholder.com/60x60/e5e7eb/6b7280?text=No+Image'">
                         </div>
-                    `;
-                });
-            }
-            
-            produkListElement.innerHTML = listHTML;
-        }
+                        
+                        <div class="flex-1">
+                            <h3 class="font-medium text-lg">${p.nama}</h3>
+                            <p class="text-sm text-secondary">Barcode: ${p.barcode}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between mt-4 pt-4 border-t">
+                        <div>
+                            <p class="font-medium text-lg">${p.harga}</p>
+                            <p class="text-sm text-secondary">Stok: ${p.stok}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="posApp.editProduk('${p.barcode}')" 
+                                class="p-2 text-secondary hover:bg-light hover:text-primary rounded-full transition-all">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="posApp.hapusProduk('${p.barcode}')" 
+                                class="p-2 text-danger hover:bg-red-100 rounded-full transition-all">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    produkListElement.innerHTML = listHTML;
+}
         
         showProductSearchResults(keyword) {
-            const produkList = JSON.parse(localStorage.getItem('produk')) || [];
-            const searchResults = this.els.searchResults;
+    const produkList = JSON.parse(localStorage.getItem('produk')) || [];
+    const searchResults = this.els.searchResults;
+    
+    const filteredProducts = produkList.filter(p => 
+        p.nama.toLowerCase().includes(keyword) ||
+        p.barcode.includes(keyword)
+    );
+   
+    searchResults.innerHTML = '';
+    
+    if (filteredProducts.length === 0) {
+        searchResults.innerHTML = `
+            <div class="px-4 py-3 text-sm text-secondary">
+                Tidak ada produk yang ditemukan
+            </div>
+        `;
+    } else {
+        filteredProducts.forEach(product => {
+            const div = document.createElement('div');
+            div.className = 'px-4 py-3 hover:bg-light cursor-pointer border-b last:border-b-0 search-result-item';
             
-            const filteredProducts = produkList.filter(p => 
-                p.nama.toLowerCase().includes(keyword) ||
-                p.barcode.includes(keyword)
-            );
-           
-            searchResults.innerHTML = '';
+            const gambarSrc = product.gambarUrl || 'https://via.placeholder.com/40x40/e5e7eb/6b7280?text=No+Image';
             
-            if (filteredProducts.length === 0) {
-                searchResults.innerHTML = `
-                    <div class="px-4 py-3 text-sm text-secondary">
-                        Tidak ada produk yang ditemukan
-                    </div>
-                `;
-            } else {
-                filteredProducts.forEach(product => {
-                    const div = document.createElement('div');
-                    div.className = 'px-4 py-3 hover:bg-light cursor-pointer border-b last:border-b-0 search-result-item';
-                    div.innerHTML = `
+            div.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <img src="${gambarSrc}" 
+                         alt="${product.nama}"
+                         class="w-10 h-10 object-cover rounded border border-gray-200"
+                         onerror="this.src='https://via.placeholder.com/40x40/e5e7eb/6b7280?text=No+Image'">
+                    <div class="flex-1">
                         <div class="flex justify-between items-start">
                             <div>
                                 <div class="font-medium">${product.nama}</div>
@@ -497,20 +541,22 @@ editProduk(barcode) {
                                 <div class="text-sm text-secondary">Stok: ${product.stok}</div>
                             </div>
                         </div>
-                    `;
-                    
-                    div.addEventListener('click', () => {
-                        this.cariProduk(product.barcode);
-                        searchResults.classList.add('hidden');
-                        this.els.searchTransaksi.value = '';
-                    });
-                    
-                    searchResults.appendChild(div);
-                });
-            }
+                    </div>
+                </div>
+            `;
             
-            searchResults.classList.remove('hidden');
-        }
+            div.addEventListener('click', () => {
+                this.cariProduk(product.barcode);
+                searchResults.classList.add('hidden');
+                this.els.searchTransaksi.value = '';
+            });
+            
+            searchResults.appendChild(div);
+        });
+    }
+    
+    searchResults.classList.remove('hidden');
+}
     
         cariProduk(barcode) {
             const produkList = JSON.parse(localStorage.getItem('produk')) || [];
