@@ -96,6 +96,8 @@ initDashboardDateFilter() {
                 const keyword = e.target.value.toLowerCase().trim();
                 this.searchProducts(keyword);
             });
+
+            this.setupImagePreviewListener();
           
             this.els.searchTransaksi.addEventListener('input', (e) => {
                 clearTimeout(this._searchTimeout);
@@ -144,6 +146,61 @@ initDashboardDateFilter() {
                 checkedRadio.dispatchEvent(event);
             }
         }
+
+        setupImagePreviewListener() {
+    // Pastikan element ada sebelum menambah listener
+    const gambarInput = document.getElementById('gambar-produk');
+    if (gambarInput) {
+        gambarInput.addEventListener('input', (e) => {
+            const url = e.target.value.trim();
+            const previewContainer = document.getElementById('image-preview');
+            const previewImg = document.getElementById('preview-img');
+            
+            if (url && this.isValidImageUrl(url)) {
+                previewImg.src = url;
+                previewImg.onload = () => {
+                    previewContainer.classList.remove('hidden');
+                };
+                previewImg.onerror = () => {
+                    previewContainer.classList.add('hidden');
+                    this.showImageError();
+                };
+            } else {
+                previewContainer.classList.add('hidden');
+            }
+        });
+    }
+}
+
+// TAMBAHKAN METHOD untuk validasi URL gambar
+isValidImageUrl(url) {
+    try {
+        new URL(url);
+        return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url) || 
+               url.includes('unsplash.com') || 
+               url.includes('imgur.com') ||
+               url.includes('cloudinary.com') ||
+               url.includes('via.placeholder.com');
+    } catch {
+        return false;
+    }
+}
+
+// TAMBAHKAN METHOD untuk error handling
+showImageError() {
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true
+    });
+    
+    Toast.fire({
+        icon: 'warning',
+        title: 'URL gambar tidak valid atau tidak dapat dimuat'
+    });
+}
        
         setupSearchKeyboardNavigation() {
             let selectedIndex = -1;
