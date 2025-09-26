@@ -8,6 +8,7 @@
             this.selectedTransaksi = null;
             this.activeFilter = 'hari';
             this.activeRiwayatFilter = 'semua'; 
+            this.viewMode = localStorage.getItem('product-view-mode') || 'list';
             this.COLORS = {
     primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(),
     secondary: getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim(),
@@ -63,6 +64,7 @@
             this.updateDashboard();
             this.tampilkanProduk();
             this.tampilkanRiwayatTransaksi();
+            this.updateViewToggleButtons();
             // Terapkan filter default
     this.filterDashboard('hari');
         }
@@ -88,6 +90,31 @@ initDashboardDateFilter() {
         // Set tanggal akhir ke hari ini
         const tanggalAkhir = new Date();
         this.els.dashboardFilterTanggalAkhir.valueAsDate = tanggalAkhir;
+    }
+}
+
+        setViewMode(mode) {
+    this.viewMode = mode;
+    localStorage.setItem('product-view-mode', mode);
+    
+    // Update toggle buttons
+    this.updateViewToggleButtons();
+    
+    // Re-render products dengan view mode baru
+    this.tampilkanProduk();
+}
+
+// Method untuk update tampilan toggle buttons
+updateViewToggleButtons() {
+    const listBtn = document.getElementById('view-list-btn');
+    const gridBtn = document.getElementById('view-grid-btn');
+    
+    if (this.viewMode === 'list') {
+        listBtn.className = 'px-3 py-1 rounded-md transition-all text-sm bg-white text-primary shadow-sm';
+        gridBtn.className = 'px-3 py-1 rounded-md transition-all text-sm text-gray-600 hover:text-gray-800';
+    } else {
+        listBtn.className = 'px-3 py-1 rounded-md transition-all text-sm text-gray-600 hover:text-gray-800';
+        gridBtn.className = 'px-3 py-1 rounded-md transition-all text-sm bg-white text-primary shadow-sm';
     }
 }
 
@@ -502,59 +529,100 @@ editProduk(barcode) {
             this.renderProductList(sortedProducts);
         }
         
-  renderProductList(products) {
+renderProductList(products) {
     const produkListElement = document.getElementById('produk-list');
-    let listHTML = '';
     
-    if (products.length === 0) {
-        listHTML = `
-            <div class="text-center py-8 text-secondary">
-                Belum ada produk yang sesuai dengan pencarian.
-            </div>
-        `;
-    } else {
-        products.forEach((p) => {
-            // Tentukan gambar yang akan ditampilkan
-            const gambarSrc = p.gambarUrl || 'https://via.placeholder.com/60x60/e5e7eb/6b7280?text=No+Image';
-            
-            listHTML += `
-                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all">
-                    <div class="flex items-center gap-3 mb-3">
-                        <!-- Gambar produk -->
-                        <div class="w-16 h-16 flex-shrink-0">
-                            <img src="${gambarSrc}" 
-                                 alt="${p.nama}"
-                                 class="w-full h-full object-cover rounded-lg border border-gray-200"
-                                 onerror="this.src='https://via.placeholder.com/60x60/e5e7eb/6b7280?text=No+Image'">
-                        </div>
-                        
-                        <div class="flex-1">
-                            <h3 class="font-medium text-lg">${p.nama}</h3>
-                            <p class="text-sm text-secondary">Barcode: ${p.barcode}</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between mt-4 pt-4 border-t">
-                        <div>
-                            <p class="font-medium text-lg">${p.harga}</p>
-                            <p class="text-sm text-secondary">Stok: ${p.stok}</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="posApp.editProduk('${p.barcode}')" 
-                                class="p-2 text-secondary hover:bg-light hover:text-primary rounded-full transition-all">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button onclick="posApp.hapusProduk('${p.barcode}')" 
-                                class="p-2 text-danger hover:bg-red-100 rounded-full transition-all">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
+    // Set container class berdasarkan view mode
+    produkListElement.className = `product-container ${this.viewMode}-view`;
+    
+    // Add switching animation
+    produkListElement.classList.add('switching');
+    
+    setTimeout(() => {
+        let listHTML = '';
+        
+        if (products.length === 0) {
+            listHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-box-open text-4xl text-gray-300 mb-3"></i>
+                    <p>Belum ada produk yang sesuai dengan pencarian.</p>
                 </div>
             `;
-        });
-    }
-    
-    produkListElement.innerHTML = listHTML;
+        } else {
+            products.forEach((p) => {
+                const gambarSrc = p.gambarUrl || 'https://via.placeholder.com/200x200/e5e7eb/6b7280?text=No+Image';
+                
+                if (this.viewMode === 'list') {
+                    // List View HTML
+                    listHTML += `
+                        <div class="product-item">
+                            <div class="product-image">
+                                <img src="${gambarSrc}" 
+                                     alt="${p.nama}"
+                                     class="w-full h-full object-cover rounded-lg border border-gray-200"
+                                     onerror="this.src='https://via.placeholder.com/60x60/e5e7eb/6b7280?text=No+Image'"
+                                     loading="lazy">
+                            </div>
+                            
+                            <div class="product-info">
+                                <h3 class="font-medium text-lg">${p.nama}</h3>
+                                <p class="text-sm text-secondary">Barcode: ${p.barcode}</p>
+                                <div class="mt-2">
+                                    <p class="font-medium text-lg">${p.harga}</p>
+                                    <p class="text-sm text-secondary">Stok: ${p.stok}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="product-actions">
+                                <button onclick="posApp.editProduk('${p.barcode}')" 
+                                    class="p-2 text-secondary hover:bg-light hover:text-primary rounded-full transition-all">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="posApp.hapusProduk('${p.barcode}')" 
+                                    class="p-2 text-danger hover:bg-red-100 rounded-full transition-all">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Grid View HTML
+                    listHTML += `
+                        <div class="product-item">
+                            <div class="product-image">
+                                <img src="${gambarSrc}" 
+                                     alt="${p.nama}"
+                                     onerror="this.src='https://via.placeholder.com/200x200/e5e7eb/6b7280?text=No+Image'"
+                                     loading="lazy">
+                            </div>
+                            
+                            <div class="product-info">
+                                <div class="product-name">${p.nama}</div>
+                                <div class="product-price">${p.harga}</div>
+                                <div class="product-stock">Stok: ${p.stok}</div>
+                            </div>
+                            
+                            <div class="product-actions">
+                                <button onclick="posApp.editProduk('${p.barcode}')" 
+                                    class="text-secondary hover:bg-light hover:text-primary transition-all"
+                                    title="Edit Produk">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="posApp.hapusProduk('${p.barcode}')" 
+                                    class="text-danger hover:bg-red-100 transition-all"
+                                    title="Hapus Produk">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+        
+        produkListElement.innerHTML = listHTML;
+        produkListElement.classList.remove('switching');
+    }, 150);
 }
         
         showProductSearchResults(keyword) {
