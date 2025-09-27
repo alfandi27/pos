@@ -718,6 +718,7 @@ exportLaporanDiskon() {
         }
     });
 }
+}
 
 // Inisialisasi export functions jika belum ada
 let exportFunctions;
