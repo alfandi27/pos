@@ -305,22 +305,23 @@ class ExportFunctions {
         // Tiap item dalam transaksi akan menjadi baris tersendiri
         transaksi.items.forEach(item => {
             excelData.push({
+                // CORE TRANSACTION INFO
                 'No. Transaksi': transaksi.nomor,
                 'Tanggal': tanggalStr,
                 'Metode Pembayaran': transaksi.metodePembayaran === 'tunai' ? 'Tunai' : 'QRIS',
-                'Barcode': item.barcode,
+                
+                // PRODUCT INFO
                 'Nama Produk': item.nama,
-                'Harga Jual': item.harga,
-                'Harga Modal': item.modal,
                 'Jumlah': item.jumlah,
-                'Subtotal Item': item.subtotal,
-                'Subtotal Modal': item.subtotalModal,
-                'Diskon Item': item.discountAmount || 0,
-                'Total Akhir Item': item.finalTotal || item.subtotal,
-                'Keuntungan Item': item.keuntungan,
-                'Subtotal Transaksi': transaksi.subtotal || transaksi.total,
-                'Jenis Diskon': discountInfo,
-                'Total Diskon': discountAmount,
+                'Harga': item.harga,
+                
+                // CALCULATED VALUES
+                'Subtotal': item.subtotal,
+                'Diskon': item.discountAmount || 0,
+                'Total': item.finalTotal || item.subtotal,
+                'Keuntungan': item.keuntungan,
+                
+                // TRANSACTION SUMMARY (only on first item to avoid repetition)
                 'Total Transaksi': transaksi.total
             });
         });
