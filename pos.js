@@ -781,7 +781,27 @@ resetDiscountForm() {
 quickDiscount(value, type) {
     document.getElementById('discount-type').value = type;
     document.getElementById('discount-value').value = value;
-    this.applyDiscount();
+    
+    const subtotal = this.calculateSubtotal();
+    let discountAmount = 0;
+    
+    if (type === 'percentage') {
+        // Bulatkan hasil perhitungan persentase
+        discountAmount = Math.round((subtotal * value) / 100);
+    } else {
+        discountAmount = Math.round(value);
+    }
+    
+    this.currentDiscount = {
+        type: type,
+        value: value,
+        amount: discountAmount
+    };
+    
+    this.updateDiscountDisplay();
+    this.updateTotalPembayaran();
+    document.getElementById('applied-discount').classList.remove('hidden');
+    this.showMobileToast('Diskon cepat diterapkan');
 }
 
 // Method untuk menerapkan diskon
@@ -823,7 +843,7 @@ applyDiscount() {
             });
             return;
         }
-        discountAmount = value;
+        discountAmount = Math.round(value);
     }
     
     // Simpan diskon
@@ -1070,7 +1090,7 @@ prosesTransaksi() {
             
             // Hitung proporsi diskon untuk item ini
             const itemDiscountProportion = subtotal > 0 ? (hargaTotal / subtotal) : 0;
-            const itemDiscountAmount = discountAmount * itemDiscountProportion;
+            const itemDiscountAmount = Math.round(discountAmount * itemDiscountProportion);
             const itemFinalTotal = hargaTotal - itemDiscountAmount;
             const keuntunganItem = itemFinalTotal - modalTotal;
             
