@@ -274,62 +274,98 @@ class ExportFunctions {
     
     // Ekspor data transaksi ke Excel
     exportTransaksiToExcel() {
-        // Ambil data transaksi berdasarkan filter
-        const dataTransaksi = this.getFilteredTransaksi();
+    // Ambil data transaksi berdasarkan filter
+    const dataTransaksi = this.getFilteredTransaksi();
+    
+    if (dataTransaksi.length === 0) {
+        Swal.fire({
+            title: 'Peringatan',
+            text: 'Belum ada data transaksi yang dapat diekspor untuk periode ini!',
+            icon: 'warning',
+            confirmButtonColor: '#7c3aed'
+        });
+        return;
+    }
+    
+    // Persiapkan data untuk Excel
+    const excelData = [];
+    
+    dataTransaksi.forEach(transaksi => {
+        // Format tanggal
+        const tanggal = new Date(transaksi.tanggal);
+        const tanggalStr = `${tanggal.getDate()}/${tanggal.getMonth() + 1}/${tanggal.getFullYear()} ${tanggal.getHours()}:${tanggal.getMinutes()}`;
         
-        if (dataTransaksi.length === 0) {
-            Swal.fire({
-                title: 'Peringatan',
-                text: 'Belum ada data transaksi yang dapat diekspor untuk periode ini!',
-                icon: 'warning',
-                confirmButtonColor: '#7c3aed'
-            });
-            return;
-        }
+        // Info diskon
+        const hasDiscount = transaksi.discount && transaksi.discount.amount > 0;
+        const discountInfo = hasDiscount ? 
+            `${transaksi.discount.type === 'percentage' ? transaksi.discount.value + '%' : 'Nominal'}` : 
+            'Tidak ada';
+        const discountAmount = hasDiscount ? transaksi.discount.amount : 0;
         
-        // Persiapkan data untuk Excel
-        const excelData = [];
-        
-        dataTransaksi.forEach(transaksi => {
-            // Format tanggal
-            const tanggal = new Date(transaksi.tanggal);
-            const tanggalStr = `${tanggal.getDate()}/${tanggal.getMonth() + 1}/${tanggal.getFullYear()} ${tanggal.getHours()}:${tanggal.getMinutes()}`;
-            
-            // Tiap item dalam transaksi akan menjadi baris tersendiri
-            transaksi.items.forEach(item => {
-                excelData.push({
-                    'No. Transaksi': transaksi.nomor,
-                    'Tanggal': tanggalStr,
-                    'Metode Pembayaran': transaksi.metodePembayaran === 'tunai' ? 'Tunai' : 'QRIS',
-                    'Barcode': item.barcode,
-                    'Nama Produk': item.nama,
-                    'Harga Jual': item.harga,
-                    'Harga Modal': item.modal,
-                    'Jumlah': item.jumlah,
-                    'Subtotal': item.subtotal,
-                    'Subtotal Modal': item.subtotalModal,
-                    'Keuntungan': item.keuntungan
-                });
+        // Tiap item dalam transaksi akan menjadi baris tersendiri
+        transaksi.items.forEach(item => {
+            excelData.push({
+                'No. Transaksi': transaksi.nomor,
+                'Tanggal': tanggalStr,
+                'Metode Pembayaran': transaksi.metodePembayaran === 'tunai' ? 'Tunai' : 'QRIS',
+                'Barcode': item.barcode,
+                'Nama Produk': item.nama,
+                'Harga Jual': item.harga,
+                'Harga Modal': item.modal,
+                'Jumlah': item.jumlah,
+                'Subtotal Item': item.subtotal,
+                'Subtotal Modal': item.subtotalModal,
+                'Diskon Item': item.discountAmount || 0,
+                'Total Akhir Item': item.finalTotal || item.subtotal,
+                'Keuntungan Item': item.keuntungan,
+                'Subtotal Transaksi': transaksi.subtotal || transaksi.total,
+                'Jenis Diskon': discountInfo,
+                'Total Diskon': discountAmount,
+                'Total Transaksi': transaksi.total
             });
         });
         
-        // Buat workbook Excel
-        const worksheet = XLSX.utils.json_to_sheet(excelData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Transaksi');
-        
-        // Generate nama file
-        const randomNumber = this.generateRandomNumber(8);
-        const randomLetters = this.generateRandomLetters(8);
-        const filterInfo = this.getFilterInfo();
-        const fileName = `DataTransaksi_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
-        
-        // Ekspor ke array
-        const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-        
-        // Upload file dan dapatkan link
-        this.uploadExcelFile(excelBuffer, fileName);
-    }
+        // Jika tidak ada items, tambahkan baris transaksi saja
+        if (transaksi.items.length === 0) {
+            excelData.push({
+                'No. Transaksi': transaksi.nomor,
+                'Tanggal': tanggalStr,
+                'Metode Pembayaran': transaksi.metodePembayaran === 'tunai' ? 'Tunai' : 'QRIS',
+                'Barcode': '',
+                'Nama Produk': '',
+                'Harga Jual': 0,
+                'Harga Modal': 0,
+                'Jumlah': 0,
+                'Subtotal Item': 0,
+                'Subtotal Modal': 0,
+                'Diskon Item': 0,
+                'Total Akhir Item': 0,
+                'Keuntungan Item': 0,
+                'Subtotal Transaksi': transaksi.subtotal || transaksi.total,
+                'Jenis Diskon': discountInfo,
+                'Total Diskon': discountAmount,
+                'Total Transaksi': transaksi.total
+            });
+        }
+    });
+    
+    // Buat workbook Excel
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Transaksi');
+    
+    // Generate nama file
+    const randomNumber = this.generateRandomNumber(8);
+    const randomLetters = this.generateRandomLetters(8);
+    const filterInfo = this.getFilterInfo();
+    const fileName = `DataTransaksi_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
+    
+    // Ekspor ke array
+    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    
+    // Upload file dan dapatkan link
+    this.uploadExcelFile(excelBuffer, fileName);
+}
     
     // Ekspor data produk ke Excel
     exportProdukToExcel() {
@@ -378,162 +414,309 @@ class ExportFunctions {
     
     // Mendapatkan data penjualan berdasarkan filter
     getFilteredSalesData() {
-        // Ambil transaksi yang difilter
-        const filteredTransaksi = this.getFilteredTransaksi();
+    // Ambil transaksi yang difilter
+    const filteredTransaksi = this.getFilteredTransaksi();
+    
+    // Hitung total dan keuntungan
+    let totalPenjualan = 0;
+    let totalModal = 0;
+    let totalKeuntungan = 0;
+    let totalDiscount = 0;
+    let totalBeforeDiscount = 0;
+    let transaksiDenganDiskon = 0;
+    let produkTerjual = {};
+    
+    // Proses setiap transaksi
+    filteredTransaksi.forEach(trx => {
+        totalPenjualan += trx.total || 0;
+        totalModal += trx.totalModal || 0;
+        totalKeuntungan += trx.keuntungan || 0;
         
-        // Hitung total dan keuntungan
-        let totalPenjualan = 0;
-        let totalModal = 0;
-        let totalKeuntungan = 0;
-        let produkTerjual = {};
+        // Hitung diskon
+        if (trx.discount && trx.discount.amount > 0) {
+            totalDiscount += trx.discount.amount;
+            transaksiDenganDiskon++;
+        }
         
-        // Proses setiap transaksi
-        filteredTransaksi.forEach(trx => {
-            totalPenjualan += trx.total || 0;
-            totalModal += trx.totalModal || 0;
-            totalKeuntungan += trx.keuntungan || 0;
-            
-            // Proses item dalam transaksi
-            trx.items.forEach(item => {
-                if (produkTerjual[item.nama]) {
-                    produkTerjual[item.nama].jumlah += item.jumlah;
-                    produkTerjual[item.nama].keuntungan += item.keuntungan;
-                } else {
-                    produkTerjual[item.nama] = {
-                        jumlah: item.jumlah,
-                        keuntungan: item.keuntungan
-                    };
-                }
-            });
+        // Hitung total sebelum diskon
+        const subtotal = trx.subtotal || (trx.total + (trx.discount ? trx.discount.amount : 0));
+        totalBeforeDiscount += subtotal;
+        
+        // Proses item dalam transaksi
+        trx.items.forEach(item => {
+            if (produkTerjual[item.nama]) {
+                produkTerjual[item.nama].jumlah += item.jumlah;
+                produkTerjual[item.nama].keuntungan += item.keuntungan;
+            } else {
+                produkTerjual[item.nama] = {
+                    jumlah: item.jumlah,
+                    keuntungan: item.keuntungan
+                };
+            }
         });
-        
-        return {
-            total: totalPenjualan,
-            totalModal: totalModal,
-            keuntungan: totalKeuntungan,
-            produkTerjual: produkTerjual
-        };
-    }
+    });
+    
+    return {
+        total: totalPenjualan,
+        totalModal: totalModal,
+        keuntungan: totalKeuntungan,
+        totalDiscount: totalDiscount,
+        totalBeforeDiscount: totalBeforeDiscount,
+        transaksiDenganDiskon: transaksiDenganDiskon,
+        jumlahTransaksi: filteredTransaksi.length,
+        produkTerjual: produkTerjual
+    };
+}
     
     // Ekspor laporan keuntungan ke Excel
     exportLaporanKeuntungan() {
-        // Ambil data penjualan berdasarkan filter yang aktif
-        const totalPenjualan = this.getFilteredSalesData();
-        
-        if (totalPenjualan.total === 0) {
-            Swal.fire({
-                title: 'Peringatan',
-                text: 'Belum ada data penjualan yang dapat diekspor untuk periode ini!',
-                icon: 'warning',
-                confirmButtonColor: '#7c3aed'
-            });
-            return;
-        }
-        
-        // Data ringkasan
-        const ringkasanData = [
-            {
-                'Keterangan': 'Periode',
-                'Nilai': this.getFilterInfo()
-            },
-            {
-                'Keterangan': 'Total Penjualan',
-                'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.total)}`
-            },
-            {
-                'Keterangan': 'Total Modal',
-                'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.totalModal || 0)}`
-            },
-            {
-                'Keterangan': 'Total Keuntungan',
-                'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.keuntungan || 0)}`
-            }
-        ];
-        
-        // Data per produk
-        const produkData = Object.entries(totalPenjualan.produkTerjual || {}).map(([nama, data]) => {
-            return {
-                'Nama Produk': nama,
-                'Jumlah Terjual': data.jumlah || 0,
-                'Keuntungan': `Rp ${new Intl.NumberFormat('id-ID').format(data.keuntungan || 0)}`
-            };
+    // Ambil data penjualan berdasarkan filter yang aktif
+    const totalPenjualan = this.getFilteredSalesData();
+    
+    if (totalPenjualan.total === 0) {
+        Swal.fire({
+            title: 'Peringatan',
+            text: 'Belum ada data penjualan yang dapat diekspor untuk periode ini!',
+            icon: 'warning',
+            confirmButtonColor: '#7c3aed'
         });
-        
-        // Buat workbook Excel
-        const workbook = XLSX.utils.book_new();
-        
-        // Sheet ringkasan
-        const ringkasanSheet = XLSX.utils.json_to_sheet(ringkasanData);
-        XLSX.utils.book_append_sheet(workbook, ringkasanSheet, 'Ringkasan');
-        
-        // Sheet detail produk
-        const produkSheet = XLSX.utils.json_to_sheet(produkData);
-        XLSX.utils.book_append_sheet(workbook, produkSheet, 'Detail Per Produk');
-        
-        // Generate nama file
-        const randomNumber = this.generateRandomNumber(8);
-        const randomLetters = this.generateRandomLetters(8);
-        const filterInfo = this.getFilterInfo();
-        const fileName = `LaporanKeuntungan_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
-        
-        // Ekspor ke array
-        const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-        
-        // Upload file dan dapatkan link
-        this.uploadExcelFile(excelBuffer, fileName);
+        return;
     }
+    
+    // Data ringkasan dengan info diskon
+    const ringkasanData = [
+        {
+            'Keterangan': 'Periode',
+            'Nilai': this.getFilterInfo()
+        },
+        {
+            'Keterangan': 'Total Penjualan (Sebelum Diskon)',
+            'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.totalBeforeDiscount || totalPenjualan.total)}`
+        },
+        {
+            'Keterangan': 'Total Diskon',
+            'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.totalDiscount || 0)}`
+        },
+        {
+            'Keterangan': 'Total Penjualan (Setelah Diskon)',
+            'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.total)}`
+        },
+        {
+            'Keterangan': 'Total Modal',
+            'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.totalModal || 0)}`
+        },
+        {
+            'Keterangan': 'Total Keuntungan',
+            'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalPenjualan.keuntungan || 0)}`
+        },
+        {
+            'Keterangan': 'Jumlah Transaksi',
+            'Nilai': totalPenjualan.jumlahTransaksi || 0
+        },
+        {
+            'Keterangan': 'Transaksi dengan Diskon',
+            'Nilai': totalPenjualan.transaksiDenganDiskon || 0
+        }
+    ];
+    
+    // Data per produk
+    const produkData = Object.entries(totalPenjualan.produkTerjual || {}).map(([nama, data]) => {
+        return {
+            'Nama Produk': nama,
+            'Jumlah Terjual': data.jumlah || 0,
+            'Keuntungan': `Rp ${new Intl.NumberFormat('id-ID').format(data.keuntungan || 0)}`
+        };
+    });
+    
+    // Data analisis diskon
+    const discountAnalysisData = this.getDiscountAnalysis();
+    
+    // Buat workbook Excel
+    const workbook = XLSX.utils.book_new();
+    
+    // Sheet ringkasan
+    const ringkasanSheet = XLSX.utils.json_to_sheet(ringkasanData);
+    XLSX.utils.book_append_sheet(workbook, ringkasanSheet, 'Ringkasan');
+    
+    // Sheet detail produk
+    const produkSheet = XLSX.utils.json_to_sheet(produkData);
+    XLSX.utils.book_append_sheet(workbook, produkSheet, 'Detail Per Produk');
+    
+    // Sheet analisis diskon
+    if (discountAnalysisData.length > 0) {
+        const discountSheet = XLSX.utils.json_to_sheet(discountAnalysisData);
+        XLSX.utils.book_append_sheet(workbook, discountSheet, 'Analisis Diskon');
+    }
+    
+    // Generate nama file
+    const randomNumber = this.generateRandomNumber(8);
+    const randomLetters = this.generateRandomLetters(8);
+    const filterInfo = this.getFilterInfo();
+    const fileName = `LaporanKeuntungan_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
+    
+    // Ekspor ke array
+    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    
+    // Upload file dan dapatkan link
+    this.uploadExcelFile(excelBuffer, fileName);
+}
+
+getDiscountAnalysis() {
+    const filteredTransaksi = this.getFilteredTransaksi();
+    const discountData = [];
+    
+    filteredTransaksi.forEach(transaksi => {
+        if (transaksi.discount && transaksi.discount.amount > 0) {
+            const tanggal = new Date(transaksi.tanggal);
+            const tanggalStr = `${tanggal.getDate()}/${tanggal.getMonth() + 1}/${tanggal.getFullYear()}`;
+            
+            discountData.push({
+                'Tanggal': tanggalStr,
+                'No. Transaksi': transaksi.nomor,
+                'Subtotal': transaksi.subtotal || transaksi.total + transaksi.discount.amount,
+                'Jenis Diskon': transaksi.discount.type === 'percentage' ? 'Persentase' : 'Nominal',
+                'Nilai Diskon': transaksi.discount.value,
+                'Jumlah Diskon': transaksi.discount.amount,
+                'Persentase dari Subtotal': transaksi.subtotal > 0 ? 
+                    `${((transaksi.discount.amount / transaksi.subtotal) * 100).toFixed(2)}%` : '0%',
+                'Total Akhir': transaksi.total
+            });
+        }
+    });
+    
+    return discountData;
+}
+
+// NEW: Export laporan diskon khusus
+exportLaporanDiskon() {
+    const filteredTransaksi = this.getFilteredTransaksi();
+    const transaksiDenganDiskon = filteredTransaksi.filter(trx => 
+        trx.discount && trx.discount.amount > 0
+    );
+    
+    if (transaksiDenganDiskon.length === 0) {
+        Swal.fire({
+            title: 'Peringatan',
+            text: 'Belum ada transaksi dengan diskon untuk periode ini!',
+            icon: 'warning',
+            confirmButtonColor: '#7c3aed'
+        });
+        return;
+    }
+    
+    // Data detail diskon
+    const discountDetailData = [];
+    let totalDiscountGiven = 0;
+    let totalSavings = 0;
+    
+    transaksiDenganDiskon.forEach(transaksi => {
+        const tanggal = new Date(transaksi.tanggal);
+        const tanggalStr = `${tanggal.getDate()}/${tanggal.getMonth() + 1}/${tanggal.getFullYear()} ${tanggal.getHours()}:${tanggal.getMinutes()}`;
+        
+        totalDiscountGiven += transaksi.discount.amount;
+        totalSavings += transaksi.subtotal - transaksi.total;
+        
+        discountDetailData.push({
+            'Tanggal': tanggalStr,
+            'No. Transaksi': transaksi.nomor,
+            'Subtotal': transaksi.subtotal,
+            'Jenis Diskon': transaksi.discount.type === 'percentage' ? 'Persentase' : 'Nominal',
+            'Nilai Diskon': transaksi.discount.value,
+            'Jumlah Diskon': transaksi.discount.amount,
+            'Total Akhir': transaksi.total,
+            'Persentase Hemat': `${((transaksi.discount.amount / transaksi.subtotal) * 100).toFixed(2)}%`
+        });
+    });
+    
+    // Summary data
+    const summaryData = [
+        { 'Keterangan': 'Total Transaksi dengan Diskon', 'Nilai': transaksiDenganDiskon.length },
+        { 'Keterangan': 'Total Diskon Diberikan', 'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalDiscountGiven)}` },
+        { 'Keterangan': 'Rata-rata Diskon per Transaksi', 'Nilai': `Rp ${new Intl.NumberFormat('id-ID').format(totalDiscountGiven / transaksiDenganDiskon.length)}` }
+    ];
+    
+    // Buat workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Sheet summary
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Ringkasan Diskon');
+    
+    // Sheet detail
+    const detailSheet = XLSX.utils.json_to_sheet(discountDetailData);
+    XLSX.utils.book_append_sheet(workbook, detailSheet, 'Detail Transaksi Diskon');
+    
+    // Generate nama file
+    const randomNumber = this.generateRandomNumber(8);
+    const randomLetters = this.generateRandomLetters(8);
+    const filterInfo = this.getFilterInfo();
+    const fileName = `LaporanDiskon_${filterInfo}_${randomNumber}_${randomLetters}.xlsx`;
+    
+    // Ekspor ke array
+    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    
+    // Upload file dan dapatkan link
+    this.uploadExcelFile(excelBuffer, fileName);
+}
     
     // Dialog pilihan ekspor
     showExportOptions() {
-        // Dapatkan info filter untuk judul
-        const filterInfo = this.getFilterInfo();
-        let filterTitle = 'Semua Data';
-        
-        if (filterInfo !== 'Semua') {
-            filterTitle = `Data ${filterInfo}`;
-        }
-        
-        Swal.fire({
-            title: `Ekspor ${filterTitle}`,
-            html: `
-                <div class="space-y-4">
-                    <p class="text-left">Pilih jenis data yang ingin diekspor:</p>
-                    <div class="grid grid-cols-1 gap-3">
-                        <button type="button" id="btn-ekspor-transaksi" class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
-                            <i class="fas fa-file-invoice mr-2"></i>Data Transaksi
-                        </button>
-                        <button type="button" id="btn-ekspor-produk" class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
-                            <i class="fas fa-box mr-2"></i>Data Produk
-                        </button>
-                        <button type="button" id="btn-ekspor-laporan" class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
-                            <i class="fas fa-chart-pie mr-2"></i>Laporan Keuntungan
-                        </button>
-                    </div>
-                </div>
-            `,
-            showConfirmButton: false,
-            showCancelButton: true,
-            cancelButtonText: 'Tutup',
-            cancelButtonColor: '#6b7280',
-            didOpen: () => {
-                // Setup event listeners
-                document.getElementById('btn-ekspor-transaksi').addEventListener('click', () => {
-                    Swal.close();
-                    this.exportTransaksiToExcel();
-                });
-                
-                document.getElementById('btn-ekspor-produk').addEventListener('click', () => {
-                    Swal.close();
-                    this.exportProdukToExcel();
-                });
-                
-                document.getElementById('btn-ekspor-laporan').addEventListener('click', () => {
-                    Swal.close();
-                    this.exportLaporanKeuntungan();
-                });
-            }
-        });
+    // Dapatkan info filter untuk judul
+    const filterInfo = this.getFilterInfo();
+    let filterTitle = 'Semua Data';
+    
+    if (filterInfo !== 'Semua') {
+        filterTitle = `Data ${filterInfo}`;
     }
+    
+    Swal.fire({
+        title: `Ekspor ${filterTitle}`,
+        html: `
+            <div class="space-y-4">
+                <p class="text-left">Pilih jenis data yang ingin diekspor:</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <button type="button" id="btn-ekspor-transaksi" class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                        <i class="fas fa-file-invoice mr-2"></i>Data Transaksi (dengan Diskon)
+                    </button>
+                    <button type="button" id="btn-ekspor-produk" class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                        <i class="fas fa-box mr-2"></i>Data Produk
+                    </button>
+                    <button type="button" id="btn-ekspor-laporan" class="w-full px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all">
+                        <i class="fas fa-chart-pie mr-2"></i>Laporan Keuntungan
+                    </button>
+                    <button type="button" id="btn-ekspor-diskon" class="w-full px-4 py-2 bg-yellow-500 text-white rounded-lg hover:opacity-90 transition-all">
+                        <i class="fas fa-percentage mr-2"></i>Laporan Diskon
+                    </button>
+                </div>
+            </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: 'Tutup',
+        cancelButtonColor: '#6b7280',
+        didOpen: () => {
+            // Setup event listeners
+            document.getElementById('btn-ekspor-transaksi').addEventListener('click', () => {
+                Swal.close();
+                this.exportTransaksiToExcel();
+            });
+            
+            document.getElementById('btn-ekspor-produk').addEventListener('click', () => {
+                Swal.close();
+                this.exportProdukToExcel();
+            });
+            
+            document.getElementById('btn-ekspor-laporan').addEventListener('click', () => {
+                Swal.close();
+                this.exportLaporanKeuntungan();
+            });
+            
+            document.getElementById('btn-ekspor-diskon').addEventListener('click', () => {
+                Swal.close();
+                this.exportLaporanDiskon();
+            });
+        }
+    });
 }
 
 // Inisialisasi export functions jika belum ada
